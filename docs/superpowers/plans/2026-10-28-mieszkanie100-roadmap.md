@@ -100,7 +100,7 @@ Co pokazujemy dla punktu (oferta, transakcja, ulica): najbliższe obiekty z odle
 | Obiekt | Źródło | Stan |
 |---|---|---|
 | Linie wysokiego napięcia (110 kV i więcej), słupy, stacje | OpenStreetMap, tag `power`, `voltage` | Do sprawdzenia na pliku PBF. Dane społeczności, mogą być niepełne. |
-| Linie najwyższego napięcia (220 i 400 kV) | Rządowe dane PSE | Źródło niesprawdzone: czy PSE udostępnia dane do pobrania, w jakim formacie i na jakich warunkach. |
+| Linie najwyższego napięcia (220 i 400 kV) | OpenStreetMap (sieć PSE jest naniesiona, `power=line`, `voltage=220000` lub `400000`) oraz ewentualnie rządowe dane PSE | Według wiki OSM (strona „Power networks/Poland") sieć 220 i 400 kV to szkielet prowadzony przez PSE. Nazwa operatora w tagach jest niejednolita („Polskie Sieci Elektroenergetyczne S.A.", „PSE Operator"), więc filtrujemy po `operator:wikidata=Q1749435` albo po samym napięciu. Strona „Power networks/Poland/PSE" nieprzeczytana (zablokowana w chmurze). Dane do pobrania od PSE niesprawdzone. |
 | Maszty i wieże telekomunikacyjne | OpenStreetMap (`man_made=mast`, `tower:type=communication`) | Do sprawdzenia. |
 | Kolej | OpenStreetMap (`railway=rail`; czynna czy zlikwidowana wynika z tagów) | Do sprawdzenia. |
 | Drogi główne | OpenStreetMap (`highway=motorway/trunk/primary`) | Do sprawdzenia. |
@@ -130,6 +130,15 @@ Pomysł: do karty lokalizacji dodać wysokość n.p.m. punktu oraz proste wskaź
 Rekomendacja: sprawdzić najpierw usługę punktową NMT z GUGiK na Raspberry Pi, bo pasuje do naszego układu współrzędnych i jest dokładniejsza. Open-Meteo zostaje planem zapasowym lub szybkim testem. Wybór zapada po spike'u na Raspberry Pi: wysokość dla 10 znanych punktów w Katowicach porównana z tym, co użytkownik wie o terenie.
 
 Zadania: spike obu źródeł na kilku punktach (wynik w `docs/`), moduł pobierania wysokości z buforem w SQLite (ten sam punkt nie jest pytany dwa razy), wskaźnik nachylenia z kilku punktów wokół, prezentacja na karcie z oznaczeniem źródła i rozdzielczości.
+
+### Blok D: bezpieczeństwo, Krajowa Mapa Zagrożeń Bezpieczeństwa (propozycja użytkownika, 2026-10-28)
+
+Oficjalna mapa: `https://mapy.geoportal.gov.pl/iMapLite/KMZBPublic.html`. Pozwala przeglądać zgłoszenia i filtrować je wg kategorii (np. nielegalne parkowanie, przekraczanie prędkości, akty wandalizmu, spożywanie alkoholu w miejscach zabronionych, zła infrastruktura drogowa), statusu i daty. Według źródeł policyjnych mapa łączy dane z systemów Policji, zgłoszenia mieszkańców przez internet i informacje z bezpośrednich kontaktów.
+
+- **Stan źródła:** w oficjalnych materiałach nie znaleziono dokumentacji publicznego API ani zbioru na dane.gov.pl. Nie wiadomo, czy dane są dostępne inaczej niż przez aplikację mapową.
+- **Rozpoznanie (wykonuje użytkownik na komputerze):** otworzyć mapę, narzędzia programisty (F12), zakładka Sieć, filtr Fetch/XHR, odświeżyć i przesunąć mapę. Zapisać adresy żądań zwracających JSON, GeoJSON, WFS lub usługę ArcGIS. Dopiero potem ocena, czy korzystanie z takiej usługi jest dozwolone i stabilne. Bez potwierdzonej, oficjalnej usługi blok D nie powstaje.
+- **Wygląd na karcie (z propozycji użytkownika):** promień 500 m, 1 km lub 2 km, kategorie i daty, liczba zgłoszeń w okolicy, odległość od nieruchomości, data ostatniej aktualizacji danych, link do oficjalnej mapy.
+- **Zasady:** odróżniać zgłoszenia mieszkańców od zagrożeń potwierdzonych przez Policję. Liczba zgłoszeń nie jest liczbą przestępstw. Brak zgłoszeń to brak zgłoszeń, a nie dowód bezpieczeństwa.
 
 ### Zadania
 

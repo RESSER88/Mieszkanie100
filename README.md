@@ -16,3 +16,21 @@ python3 rcn/rcn_import.py --teryt 2469 --layer lokale --db ~/rcn/rcn_test.sqlite
 ```
 
 Dalsze kroki testowe: `docs/rcn-testy-na-raspberry-pi.md`. Projekt i uzasadnienie decyzji: `docs/superpowers/specs/2026-10-28-rcn-importer-design.md`.
+
+## Raspberry Pi: pobranie i aktualizacja kodu
+
+Pierwsze podłączenie istniejącego folderu (który powstał z paczki `.tar.gz`) do repozytorium. Pliki kodu zostaną zastąpione wersją z GitHuba, a baza, pliki w `ref/` i logi zostaną (są w `.gitignore`):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git init -b main && git remote add origin https://github.com/RESSER88/Mieszkanie100.git && git fetch origin main && git checkout -f -B main origin/main
+```
+
+Każda kolejna aktualizacja:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git pull && bash scripts/pi_check.sh
+```
+
+`scripts/pi_check.sh` uruchamia testy jednostkowe, a jeśli w folderze jest `rcn_test.sqlite`, także raport bazy i raport okolicy. Inną bazę wskazuje zmienna `RCN_DB`.
+
+Kolejka prac i technologia: `docs/superpowers/plans/2026-10-28-kolejka-prac.md`.
