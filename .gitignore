@@ -6,3 +6,5 @@ ref/
 *.log
 *.gpkg
 *.zip
+*.pbf
+*.geojsonseq

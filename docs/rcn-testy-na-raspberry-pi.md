@@ -74,3 +74,33 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/okolica.py --db rcn_test.sqlit
 ```
 
 Do sprawdzenia: czy ulica została znaleziona, ile rekordów ma środek okolicy, czy próbki mają sens (kilkadziesiąt transakcji, nie 0 ani 5000) i czy mediana zł/m² jest wiarygodna dla tej okolicy. Wynik wkleić do dokumentu projektowego.
+
+## Otoczenie z OpenStreetMap (pozycja 3 kolejki)
+
+Moduł `rcn/otoczenie.py` przeszedł 17 testów na danych sztucznych (w tym przeliczanie współrzędnych na EPSG:2180 zgodne z pyproj co do 5 cm). Na prawdziwym wycinku OSM nie był jeszcze uruchamiany.
+
+1. Instalacja narzędzia `osmium` (jednorazowo, wymaga hasła `sudo`):
+
+```bash
+sudo apt update && sudo apt install -y osmium-tool
+```
+
+2. Pobranie wycinku województwa śląskiego z Geofabrik (według opisu około 177 MB, rozmiar niezweryfikowany). Odświeżać rzadko, np. raz w miesiącu:
+
+```bash
+mkdir -p /mnt/nas/projects/mieszkanie100/ref/osm && cd /mnt/nas/projects/mieszkanie100/ref/osm && wget -O slaskie-latest.osm.pbf https://download.geofabrik.de/europe/poland/slaskie-latest.osm.pbf && ls -l
+```
+
+3. Wyfiltrowanie potrzebnych obiektów i zapis do GeoJSON:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100/ref/osm && osmium tags-filter slaskie-latest.osm.pbf nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link w/railway=rail nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant nwr/landuse=industrial,landfill,quarry -o otoczenie-slask.osm.pbf --overwrite && osmium export otoczenie-slask.osm.pbf -f geojsonseq --add-unique-id=type_id -o otoczenie-slask.geojsonseq --overwrite && ls -l
+```
+
+4. Wczytanie do bazy i raport dla ul. Braci Mniejszych w promieniu 3 km:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/otoczenie.py import --geojsonseq ref/osm/otoczenie-slask.geojsonseq --osm-db osm_slask.sqlite && python3 rcn/otoczenie.py near --osm-db osm_slask.sqlite --rcn-db rcn_test.sqlite --street "Braci Mniejszych" --radius 3000
+```
+
+Do sprawdzenia: ile obiektów zapisano, ile błędnych, czy najbliższe przedszkola, szkoły, przystanki i linie energetyczne zgadzają się z tym, co użytkownik zna z okolicy.

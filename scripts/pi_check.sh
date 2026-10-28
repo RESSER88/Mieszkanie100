@@ -40,4 +40,11 @@ for name, counter in (("funkcja", kinds), ("udzial", shares), ("rodzaj_trans", t
 PY
 echo "== Okolica: ul. Braci Mniejszych, 500 m, 24 miesiące"
 python3 rcn/okolica.py --db "$DB" --street "Braci Mniejszych" --radius 500 --months 24
+OSM_DB="${OSM_DB:-osm_slask.sqlite}"
+if [ -f "$OSM_DB" ]; then
+  echo "== Otoczenie z OSM: ul. Braci Mniejszych, 3 km"
+  python3 rcn/otoczenie.py near --osm-db "$OSM_DB" --rcn-db "$DB" --street "Braci Mniejszych" --radius 3000
+else
+  echo "== Brak bazy OSM $OSM_DB: pomijam otoczenie."
+fi
 echo "== Gotowe"
