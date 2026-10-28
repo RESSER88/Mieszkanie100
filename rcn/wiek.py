@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Approximate building age from RCN sales, and a check of whether that is usable.
 
-The unit id (LOK_ID_LOKALU) carries the building id, e.g.
-246901_1.0003.AR_54.73/47.1_BUD.1_LOK. RCN starts in 2012, so:
+The unit id (LOK_ID_LOKALU) looks like 246901_1.0003.AR_45.14/15.5_BUD.69_LOK: the part
+before _BUD is the parcel, the number after BUD. differs per unit (checked on the Pi: one
+staircase at Szurmana 10 has BUD.13 to BUD.74). A building is therefore the parcel plus the
+address (street and number); a unit without an address is grouped by parcel. RCN starts in 2012, so:
 - the first sale in a building is a secondary-market sale before the cutoff year:
   the building already stood then, so it is older than the limit (certain);
 - the first sale is a primary-market sale in or after the cutoff year: the building is
@@ -28,12 +30,20 @@ from rcn.okolica import _norm_street  # noqa: E402
 
 YEARS = 10
 LABELS = ("do 10 lat (szacunek)", "granica około 10 lat", "ponad 10 lat", "nieznany")
-_KEY = re.compile(r"^(.+?_BUD\.[^_]+)")
+_PARCEL = re.compile(r"^(.+?)_BUD\.")
 
 
-def building_key(unit_id: Optional[str]) -> Optional[str]:
-    match = _KEY.match(unit_id or "")
+def parcel_of(unit_id: Optional[str]) -> Optional[str]:
+    match = _PARCEL.match(unit_id or "")
     return match.group(1) if match else None
+
+
+def building_key(unit_id: Optional[str], street: Optional[str], number: Optional[str]) -> Optional[str]:
+    parcel = parcel_of(unit_id)
+    if parcel is None:
+        return None
+    address = _norm_street(" ".join(p for p in (street, number) if p))
+    return parcel + "|" + address if address else parcel
 
 
 def building_stats(con: sqlite3.Connection) -> Dict[str, Dict[str, Any]]:
@@ -42,7 +52,7 @@ def building_stats(con: sqlite3.Connection) -> Dict[str, Dict[str, Any]]:
     addresses: Dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for unit_id, day, market, street, number in con.execute(
             "SELECT obj_id, dok_data, rodzaj_rynku, ulica, nr FROM lokale WHERE dok_data IS NOT NULL"):
-        key = building_key(unit_id)
+        key = building_key(unit_id, street, number)
         if key is None:
             continue
         s = stats.setdefault(key, {"sprzedaze": 0, "pierwotne": 0, "pierwsza": None, "pierwsza_pierwotna": None,

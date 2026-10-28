@@ -12,25 +12,29 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from rcn import rcn_import as ri  # noqa: E402
 from rcn import wiek  # noqa: E402
 
-BUD_A = "246901_1.0003.AR_54.73/47.1_BUD.1"     # new block: first sale primary 2018
-BUD_B = "246901_1.0003.AR_54.80/2.1_BUD.2"      # old block: secondary sale in 2013
-BUD_C = "246901_1.0003.AR_54.90/1.1_BUD.1"      # only secondary sales after 2016: unknown
-BUD_D = "246901_1.0003.AR_54.95/1.1_BUD.3"      # first primary sale 2015: borderline
+# Unit ids as on the Pi: parcel, then BUD.<number that differs per unit>, then _LOK.
+NEW = "246901_1.0003.AR_45.14/15.5"     # new block: first sale primary 2018
+OLD = "246901_1.0003.AR_54.80/2.1"      # old block: secondary sale in 2013
+UNK = "246901_1.0003.AR_54.90/1.1"      # only secondary sales after 2016: unknown
+EDGE = "246901_1.0003.AR_54.95/1.1"     # first primary sale 2015: borderline
+BUD_A, BUD_B = NEW + "|szurmana 2", OLD + "|szurmana 10"
+BUD_C, BUD_D = UNK + "|inna 5", EDGE + "|szurmana 18"
 
 
-def row(gid, building, day, market, street="ul. Szurmana", nr="2"):
+def row(gid, parcel, day, market, street="ul. Szurmana", nr="2", unit=None):
     r = dict.fromkeys(ri.Store._COLS)
-    r.update(gid=gid, teryt="2469", tran_id="T%d" % gid, obj_id=building + "_LOK" if building else None,
+    unit_id = "%s_BUD.%d_LOK" % (parcel, unit or gid) if parcel else None
+    r.update(gid=gid, teryt="2469", tran_id="T%d" % gid, obj_id=unit_id,
              dok_data=day, rodzaj_rynku=market, rodzaj_obiektu="mieszkalna", ulica=street, nr=nr, raw_json="{}")
     return r
 
 
 def db(path):
-    rows = [row(1, BUD_A, "2018-03-01", "rynekPierwotny"), row(2, BUD_A, "2019-05-01", "rynekPierwotny"),
-            row(3, BUD_A, "2024-01-10", "rynekWtorny"),
-            row(4, BUD_B, "2013-02-01", "rynekWtorny", nr="10"), row(5, BUD_B, "2025-02-01", "rynekWtorny", nr="10"),
-            row(6, BUD_C, "2021-06-01", "rynekWtorny", street="ul. Inna", nr="5"),
-            row(7, BUD_D, "2015-07-01", "rynekPierwotny", nr="18"),
+    rows = [row(1, NEW, "2018-03-01", "rynekPierwotny"), row(2, NEW, "2019-05-01", "rynekPierwotny"),
+            row(3, NEW, "2024-01-10", "rynekWtorny", street="Szurmana", unit=1),
+            row(4, OLD, "2013-02-01", "rynekWtorny", nr="10"), row(5, OLD, "2025-02-01", "rynekWtorny", nr="10"),
+            row(6, UNK, "2021-06-01", "rynekWtorny", street="ul. Inna", nr="5"),
+            row(7, EDGE, "2015-07-01", "rynekPierwotny", nr="18"),
             row(8, None, "2020-01-01", "rynekWtorny")]
     store = ri.Store(path)
     store.save_page("lokale", "2469", rows, 8)
@@ -38,11 +42,20 @@ def db(path):
 
 
 class KeyTests(unittest.TestCase):
-    def test_building_key_from_unit_id(self):
-        self.assertEqual(wiek.building_key("246901_1.0003.AR_54.73/47.1_BUD.1_LOK"), BUD_A)
-        self.assertEqual(wiek.building_key(BUD_A + "_LOK.12"), BUD_A)
-        self.assertIsNone(wiek.building_key("246901_1.0003.AR_54.73/47.1_LOK"))
-        self.assertIsNone(wiek.building_key(None))
+    def test_units_of_one_building_share_a_key(self):
+        a = wiek.building_key(NEW + "_BUD.69_LOK", "ul. Szurmana", "2")
+        b = wiek.building_key(NEW + "_BUD.74_LOK", "Szurmana", "2")
+        self.assertEqual(a, b)
+        self.assertEqual(a, BUD_A)
+
+    def test_two_addresses_on_one_parcel_are_two_buildings(self):
+        self.assertNotEqual(wiek.building_key(NEW + "_BUD.1_LOK", "ul. Szurmana", "2"),
+                            wiek.building_key(NEW + "_BUD.2_LOK", "ul. Szurmana", "4"))
+
+    def test_unit_without_address_grouped_by_parcel(self):
+        self.assertEqual(wiek.building_key(NEW + "_BUD.1_LOK", None, None), NEW)
+        self.assertIsNone(wiek.building_key("246901_1.0003.AR_54.73/47.1_LOK", "ul. Szurmana", "2"))
+        self.assertIsNone(wiek.building_key(None, "ul. Szurmana", "2"))
 
 
 class ClassifyTests(unittest.TestCase):
