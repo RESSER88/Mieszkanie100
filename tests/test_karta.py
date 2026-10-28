@@ -82,6 +82,12 @@ class CardTests(unittest.TestCase):
                          "Najbliższe sprzedaże"):
             self.assertIn(expected, text)
 
+    def test_mentions_source_labels(self):
+        for source, label in (("opis", "(z opisu)"), ("opis i cechy ogłoszenia", "(z opisu i listy cech ogłoszenia)"),
+                              ("cała strona", "(z całej strony, mniej pewne)")):
+            self.offer["wzmianki"], self.offer["wzmianki_zrodlo"] = {"ogrod": True}, source
+            self.assertIn(label, kt.format_card(self.card()))
+
     def test_missing_coordinates_is_an_error_not_a_guess(self):
         self.offer["lat"] = self.offer["lon"] = None
         with self.assertRaises(kt.CardError):

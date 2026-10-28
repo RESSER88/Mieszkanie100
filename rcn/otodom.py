@@ -40,8 +40,12 @@ class OtodomError(Exception):
         self.partial = partial or []
 
 
-def page_url(base: str, page: int) -> str:
-    return base + "?" + urllib.parse.urlencode(dict(QUERY, page=str(page)))
+def page_url(base: str, page: int, area_min: Optional[float] = None) -> str:
+    """Search page URL; areaMin narrows results on Otodom's side (filters are applied here too)."""
+    query = dict(QUERY, page=str(page))
+    if area_min:
+        query["areaMin"] = str(int(area_min))
+    return base + "?" + urllib.parse.urlencode(query)
 
 
 def parse_page(html: str) -> Tuple[List[dict], int]:
@@ -58,13 +62,13 @@ def parse_page(html: str) -> Tuple[List[dict], int]:
 
 
 def search_all(base: str = SEARCH_URL, pause: float = 3.0, max_pages: int = 10, sleep=time.sleep,
-               fetch_page=fetch) -> Tuple[List[dict], int]:
+               fetch_page=fetch, area_min: Optional[float] = None) -> Tuple[List[dict], int]:
     items: List[dict] = []
     pages, page = 0, 1
     while True:
         if page > 1:
             sleep(pause)
-        status, html = fetch_page(page_url(base, page))
+        status, html = fetch_page(page_url(base, page, area_min))
         if status != 200 or html is None:
             raise OtodomError("Otodom odmówił: HTTP %d na stronie %d" % (status, page), items)
         got, count = parse_page(html)
@@ -128,7 +132,7 @@ def main(argv=None, today: Optional[date] = None) -> int:
     today = today or date.today()
     exit_code, note = 0, ""
     try:
-        raw, pages = search_all(args.url, args.pauza, args.max_stron)
+        raw, pages = search_all(args.url, args.pauza, args.max_stron, area_min=args.metraz_od)
     except OtodomError as exc:
         raw, pages, exit_code = exc.partial, None, 1
         note = "UWAGA: %s. Wynik niepełny, nie ponawiać w pętli." % exc
@@ -142,6 +146,9 @@ def main(argv=None, today: Optional[date] = None) -> int:
                                             args.rynek)]
     print("Otodom: pobrano %d ofert z %s stron, pasuje do filtrów: %d, nowych od ostatniego razu: %d" % (
         len(offers), pages if pages is not None else "?", len(chosen), len(new_ids & {o["id"] for o in chosen})))
+    if pages and pages > args.max_stron:
+        print("UWAGA: Otodom ma %d stron wyników, pobrano %d (--max-stron). Najstarsze oferty pominięte." % (
+            pages, args.max_stron))
     if note:
         print(note)
     rcn = sqlite3.connect(args.rcn_db)

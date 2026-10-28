@@ -91,7 +91,8 @@ def format_card(card: Dict[str, Any]) -> str:
     if o.get("wzmianki"):
         mentions = ", ".join("%s%s" % (k, "" if v is True else " %g m²" % v if isinstance(v, float) else " %s" % v)
                              for k, v in o["wzmianki"].items())
-        source = "z opisu" if o.get("wzmianki_zrodlo") == "opis" else "z całej strony, mniej pewne"
+        source = {"opis": "z opisu", "opis i cechy ogłoszenia": "z opisu i listy cech ogłoszenia"}.get(
+            o.get("wzmianki_zrodlo"), "z całej strony, mniej pewne")
         lines.append("Wzmianki w treści ogłoszenia (%s): %s" % (source, mentions))
     if o.get("polozenie_uwaga"):
         lines.append(o["polozenie_uwaga"])

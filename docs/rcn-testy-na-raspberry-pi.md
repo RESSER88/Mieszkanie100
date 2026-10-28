@@ -239,3 +239,8 @@ Wyniki wyszukiwania Otodom (32 oferty na stronę) mają ulicę, dzielnicę, cen�
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && python3 rcn/otodom.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100
 ```
+
+### Wynik przeglądania Otodom i diagnoza wzmianek (2026-10-28, kod `41b7588`)
+
+- `rcn/otodom.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100`: Otodom ma 79 stron wyników dla Katowic (po 72 oferty), pobrano 10 najnowszych (727 ofert), pasuje 0. Poprawka: filtr metrażu przekazywany do Otodom w adresie (`areaMin`), a ostrzeżenie, gdy stron jest więcej niż `--max-stron`.
+- Ogłoszenie z ul. Widok ma `ad.description` (3656 znaków) i `target.Extras_types = ['balcony', 'lift', 'garage', 'garden']`. Wzmianki były więc poprawne (z opisu i listy cech); błędny był tylko napis „z całej strony" w karcie. Poprawione.

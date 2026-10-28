@@ -119,6 +119,10 @@ class SearchTests(unittest.TestCase):
         finally:
             srv.close()
 
+    def test_area_filter_is_passed_to_otodom(self):
+        self.assertIn("areaMin=100", otodom.page_url(otodom.SEARCH_URL, 1, area_min=100.0))
+        self.assertNotIn("areaMin", otodom.page_url(otodom.SEARCH_URL, 1))
+
     def test_refusal_stops_and_keeps_partial(self):
         srv = FakeOtodom([page_html([ad(1)], 3)])
         try:
