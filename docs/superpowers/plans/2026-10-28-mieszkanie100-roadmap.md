@@ -22,7 +22,7 @@ Narzędzie na Raspberry Pi, które pomaga rodzinie (2 dorosłych, 2 dzieci) wybr
 | 2. Okolica: ceny w promieniu | Zapytanie: transakcje w promieniu X metrów od ulicy, z ostatnich N miesięcy, mediana zł/m² z próbką i okresem. Plan: `docs/superpowers/plans/2026-10-28-okolica-query.md`. | Zaimplementowany (`rcn/okolica.py`, 22 testy na danych sztucznych). Czeka na test na prawdziwej bazie na Raspberry Pi, w tym sprawdzenie wartości `rodzaj_rynku`. |
 | 3. Ceny ofertowe nowych mieszkań | Klient mScanner (`mode=asking`), sprawdzenie pokrycia Katowic, cytowanie źródła. | Do zrobienia. Pokrycie niesprawdzone. |
 | 4. Monitor ofert zakupu | Pobieranie ofert kupna z portali: Otodom, Gratka, OLX Nieruchomości, Morizon, Nieruchomosci-online.pl, Domiporta, Adresowo, RynekPierwotny. Szczegóły w sekcji „Etap 4" poniżej. | Zażądany przez użytkownika 2026-10-28. Wymaga rozpoznania każdego portalu (regulamin, dostęp techniczny) przed budową. Nie zaczęty. |
-| 5. Otoczenie | Przedszkola, szkoły, komunikacja, planowane inwestycje (plan miejscowy, pozwolenia na budowę). | Wstrzymany: nie ma wybranych źródeł. Darmowe API mScanner tego nie zawiera. |
+| 5. Otoczenie | Przedszkola, szkoły, komunikacja, planowane inwestycje (plan miejscowy, pozwolenia na budowę). | Kandydat na źródło: OpenStreetMap (przedszkola, szkoły, przystanki). Niesprawdzony, szczegóły w sekcji „Mapy i dane przestrzenne". Darmowe API mScanner tego nie zawiera. Planowane inwestycje nadal bez źródła. |
 | 6. Uruchomienie | Docker, uruchamianie cykliczne, powiadomienia, odświeżanie danych (WFS od ostatniej daty). | Po etapach 2–3. |
 
 ## Etap 4: monitor ofert zakupu (szczegóły)
@@ -60,6 +60,32 @@ Cel: oferty kupna z ośmiu portali (Otodom, Gratka, OLX Nieruchomości, Morizon,
 3. Adapter pierwszego portalu na zapisanych stronach.
 4. Połączenie z kartą z etapu 2.
 5. Kolejne portale, po jednym.
+
+## Mapy i dane przestrzenne: Mapbox i OpenStreetMap (propozycja, 2026-10-28)
+
+Użytkownik chce użyć darmowej wersji Mapbox (repozytorium `mapbox/mapbox-agent-skills`) oraz OpenStreetMap (przewodnik wiki OSM dla biznesu). Poniżej to, co ustalono, i to, czego jeszcze nie sprawdzono. Wiki OSM i strony Mapbox są niedostępne ze środowiska chmurowego, więc zasady licencji i limity trzeba potwierdzić na Raspberry Pi lub po odblokowaniu domen.
+
+### Do czego który element
+
+- **Skille Mapbox** to instrukcje dla agenta (jak poprawnie budować mapy, wyszukiwanie adresów, ochrona tokenów), a nie usługa. Zainstalowano sześć istotnych: geospatial-operations, search-patterns, search-integration, token-security, web-integration-patterns, data-visualization-patterns. Same usługi Mapbox (mapa, geokodowanie, czasy dojazdu) wymagają darmowego konta i tokenu dostępu.
+- **Mapa transakcji** na stronie z Raspberry Pi (etap 6): punkty transakcji z kolorem wg ceny za m². Kandydaci: Mapbox GL JS (token publiczny z ograniczeniem adresu URL) albo MapLibre z kafelkami OSM. Wybór po sprawdzeniu limitów darmowego planu.
+- **Geokodowanie adresów ofert** (etap 4): oferty często mają tylko adres. Kolejność prób (propozycja): (1) współrzędne z własnej bazy RCN dla tej samej ulicy i numeru, (2) Nominatim z buforowaniem wyników, (3) Mapbox tylko po sprawdzeniu warunków.
+- **Otoczenie** (etap 5): przedszkola (`amenity=kindergarten`), szkoły (`amenity=school`) i przystanki (`highway=bus_stop`, `railway=tram_stop`) z OpenStreetMap, odległość od współrzędnych oferty. Zalecane: pobrać wycinek danych dla województwa śląskiego i odświeżać go rzadko, zamiast odpytywać publiczne serwery przy każdej karcie.
+
+### Ograniczenia i ryzyka (do potwierdzenia przed użyciem)
+
+- Mapbox: według skilla `mapbox-search-integration` wyniki geokodowania przeznaczone do przechowywania w bazie wymagają trybu „permanent" Geocoding API. Czy mieści się to w darmowym planie, trzeba sprawdzić w cenniku. Nie przechowujemy w bazie wyników geokodowania w trybie tymczasowym, dopóki warunki tego nie potwierdzą. Limity darmowego planu (mapy, geokodowanie, czasy dojazdu) nie zostały sprawdzone.
+- Token Mapbox: nigdy w repozytorium ani w czacie. Na Raspberry Pi w zmiennej środowiskowej `MAPBOX_ACCESS_TOKEN`. Token publiczny z ograniczeniem adresów URL, bez uprawnień zapisu (zasady ze skilla `mapbox-token-security`).
+- OpenStreetMap: dane na licencji ODbL wymagają podania źródła („© autorzy OpenStreetMap") przy wyświetlaniu. Warunki dla baz pochodnych (Share-Alike) i pełne zasady z przewodnika dla biznesu nie zostały jeszcze przeczytane.
+- Publiczny Nominatim: według oficjalnej polityki działa na ograniczonych, donowanych serwerach, wymaga rozpoznawalnego `User-Agent`, zaleca buforowanie, odradza zapytania masowe i zakazuje przesyłania danych osobowych. Dopuszczalne dla małej aplikacji z buforowaniem, nie dla pętli po tysiącach adresów.
+- Overpass API ma własne limity korzystania. Zasady nie zostały sprawdzone.
+
+### Zadania
+
+1. Odblokować domeny w ustawieniach sieci środowiska albo sprawdzić zasady na Raspberry Pi: wiki OSM, osmfoundation.org, mapbox.com (cennik i warunki).
+2. Zapisać w `docs/` wniosek o licencji ODbL, warunkach Mapbox i dozwolonym przechowywaniu wyników.
+3. Spike na Raspberry Pi: pobrać wycinek OSM dla woj. śląskiego, policzyć przedszkola i szkoły w promieniu 1 km od ul. Braci Mniejszych i porównać z tym, co użytkownik wie o okolicy.
+4. Dopiero potem wybrać Mapbox GL JS lub MapLibre dla mapy transakcji.
 
 ## Decyzje, które musi podjąć użytkownik
 
