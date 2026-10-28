@@ -129,3 +129,9 @@ Do ponownego sprawdzenia przez użytkownika: czy najbliższe obiekty zgadzają s
 - Bez zmian: linia 110 kV 1139 m, kolej 633 m, teren przemysłowy 226 m, maszt 198 m, przedszkole 135 m, szkoła 83 m.
 
 Weryfikacja z wiedzą użytkownika o okolicy: jeszcze nie.
+
+## Odczyt ogłoszenia z linku (pozycja 4a kolejki)
+
+`rcn/oferta.py probe URL` pobiera jedną stronę ogłoszenia na żądanie użytkownika (bez przeszukiwania portalu), usuwa z adresu parametry reklamowe (`utm_*`, `gclid`, `gad_*`), zapisuje HTML w `ref/oferty/` (poza repozytorium) i wypisuje pola z danych strukturalnych: JSON-LD, `__NEXT_DATA__`, znaczniki `og:`. Nie wypisuje telefonów, e-maili, nazwisk ani adresów biur pośredników. Przy odmowie portalu (np. HTTP 403) kończy się bez ponawiania.
+
+Pierwsze przypadki: ogłoszenie z Gratki przy ul. bp. Szurmana oraz ogłoszenie z Nieruchomosci-online.pl.
