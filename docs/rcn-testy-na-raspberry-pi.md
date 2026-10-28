@@ -199,3 +199,17 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://www.olx.pl/d
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py --cena 839000 --metraz 65.08 --ulica "Szurmana"
 ```
+
+## Ogłoszenia z OLX (pozycja 10a kolejki)
+
+Jedno zapytanie testowe do wyszukiwania GraphQL OLX z Raspberry Pi (2026-10-28) zwróciło HTTP 200 i 986 ofert sprzedaży mieszkań w Katowicach (`city_id=7691`, `region_id=6`, kategoria 14), z dzielnicą, współrzędnymi i parametrami. Strony pojedynczych ogłoszeń OLX nadal zwracają 403. To nieoficjalny interfejs OLX: może zostać zmieniony lub zamknięty, a regulamin OLX może zabraniać automatycznego pobierania. Używamy go rzadko (zalecane raz dziennie), jedno zapytanie naraz, z przerwą 3 s, z uczciwym identyfikatorem i bez ponawiania po odmowie.
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/olx.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100
+```
+
+Karta dla oferty z OLX (z zapamiętanych wyników, bez pobierania strony ogłoszenia):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "LINK_DO_OFERTY_OLX_Z_WYNIKU_SZUKANIA"
+```

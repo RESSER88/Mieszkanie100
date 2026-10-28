@@ -10,6 +10,7 @@ import argparse
 import os
 import sqlite3
 import sys
+import urllib.parse
 from datetime import date
 from typing import Any, Dict, Optional
 
@@ -137,6 +138,18 @@ def _offer_from_link(args) -> Optional[Dict[str, Any]]:
     except ValueError as exc:
         print("BŁĄD: %s" % exc, file=sys.stderr)
         return None
+    if "olx.pl" in urllib.parse.urlsplit(url).netloc and not args.file:
+        # OLX listing pages answer 403; use the stored search result instead.
+        from rcn.olx import OfferStore
+        store = OfferStore(args.oferty_db)
+        try:
+            offer = store.find_by_url(url)
+        finally:
+            store.close()
+        if offer is None:
+            print("BŁĄD: tej oferty OLX nie ma w zapisanych wynikach. Najpierw uruchom"
+                  " `python3 rcn/olx.py szukaj` (strony ogłoszeń OLX odmawiają pobrania).", file=sys.stderr)
+        return offer
     if args.file:
         try:
             with open(args.file, encoding="utf-8", errors="replace") as f:
@@ -187,6 +200,7 @@ def main(argv=None, today: Optional[date] = None) -> int:
     p.add_argument("--rok", type=int, help="wpis ręczny: rok budowy")
     p.add_argument("--rcn-db", default="rcn_test.sqlite")
     p.add_argument("--osm-db", default="osm_slask.sqlite")
+    p.add_argument("--oferty-db", default="oferty.sqlite", help="zapisane wyniki wyszukiwania OLX (rcn/olx.py)")
     p.add_argument("--radius", type=float, default=500.0)
     p.add_argument("--months", type=int, default=24)
     p.add_argument("--area-tol", type=float, default=0.3, help="dopuszczalna różnica metrażu, ułamek (0.3 = 30%%)")
