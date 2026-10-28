@@ -299,3 +299,11 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && bash scripts/pi_check.sh && py
 ```
 
 Potem na telefonie w tej samej sieci otworzyć adres wypisany w linii „Mapa działa: …”.
+
+## Mapa: nowy wygląd i podobne oferty (2026-10-28)
+
+Opis decyzji: `docs/superpowers/specs/2026-10-28-mapa-wyglad.md`. Sprawdzone w chmurze: 168 testów i strona w Chromium (komputer jasny i ciemny, telefon 390 px bez przewijania w bok, bez błędów JavaScript), na danych testowych. Podobne oferty pojawią się tylko wtedy, gdy wcześniej uruchomiono wyszukiwanie OLX lub Otodom. Na Pi (serwer trzeba uruchomić od nowa, bo stronę wczytuje przy starcie):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git pull && python3 rcn/olx.py szukaj && python3 rcn/otodom.py szukaj --metraz-od 50 && python3 rcn/mapa.py
+```

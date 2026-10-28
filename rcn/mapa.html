@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mieszkanie100 mapa</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  /* Tokens. Price scale: blue cheaper, grey typical, red dearer (dataviz diverging pair).
+     Aqua only for everyday places; nuisances are graphite so they never compete with prices. */
+  :root {
+    color-scheme: light;
+    --ground: #f6f7f5; --surface: #ffffff; --ink: #1c2321; --ink-2: #4d5753; --muted: #66706b;
+    --line: #dfe3e0; --line-2: #c9cfcb; --band: #e7eae8;
+    --cheap: #2a78d6; --typical: #8f9692; --dear: #e34948; --daily: #1baf7a; --nuisance: #4d5753;
+    --road: #8a6a00; --focus: #1c2321;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #171b19; --surface: #1d2220; --ink: #e8ece9; --ink-2: #c1c9c4; --muted: #9aa49f;
+      --line: #313835; --line-2: #414945; --band: #2a312e;
+      --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --nuisance: #b9c2bd;
+      --road: #c98500; --focus: #e8ece9;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #171b19; --surface: #1d2220; --ink: #e8ece9; --ink-2: #c1c9c4; --muted: #9aa49f;
+    --line: #313835; --line-2: #414945; --band: #2a312e;
+    --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --nuisance: #b9c2bd;
+    --road: #c98500; --focus: #e8ece9;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--ink); color: var(--ground); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  a { color: inherit; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+  a:hover { text-decoration-color: currentColor; }
+
+  /* Bar: product name and the one job of the page, pasting a link. */
+  .bar { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .bar-in { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; white-space: nowrap;
+           min-height: 44px; align-self: start; }
+  #f { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+  .brand svg { flex: none; }
+  .ask { display: flex; gap: 8px; }
+  .ask input { flex: 1 1 auto; width: 100%; }
+  label.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  input, select { font: inherit; color: var(--ink); background: var(--ground); border: 1px solid var(--line-2);
+                  border-radius: 6px; padding: 9px 10px; min-height: 44px; min-width: 0; }
+  input::placeholder { color: var(--muted); }
+  button { font: inherit; font-weight: 600; min-height: 44px; padding: 0 16px; border-radius: 6px; cursor: pointer;
+           background: var(--ink); color: var(--ground); border: 1px solid var(--ink); white-space: nowrap;
+           transition: opacity .15s ease-out; }
+  button:hover { opacity: .88; }
+  button[disabled] { opacity: .55; cursor: progress; }
+  .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--ink-2); font-size: 14px; }
+  .opts label { display: inline-flex; align-items: center; gap: 6px; }
+  .opts select { min-height: 36px; padding: 4px 8px; }
+  button.linkish { background: none; border: 0; color: var(--ink-2); font-weight: 500; font-size: 14px; padding: 0;
+                   min-height: 36px; text-decoration: underline; text-underline-offset: 3px;
+                   text-decoration-color: var(--line-2); }
+  button.linkish:hover { opacity: 1; color: var(--ink); text-decoration-color: currentColor; }
+  .manual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 4px 0 6px; }
+  .manual-grid label:first-child { grid-column: 1 / -1; }
+  @media (min-width: 720px) {
+    .manual-grid { grid-template-columns: 2fr 1fr 1fr 1fr 1fr; }
+    .manual-grid label:first-child { grid-column: auto; }
+  }
+  .manual-grid label { display: grid; gap: 2px; font-size: 13px; color: var(--ink-2); }
+  #status { margin: 0; font-size: 14px; color: var(--ink-2); min-height: 21px; }
+  #status.err { color: var(--dear); font-weight: 600; }
+
+  /* Work area: map left (sticky), findings right. Phone: stacked. */
+  .work { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); }
+  #map { height: 56vh; min-height: 300px; background: var(--band); }
+  #panel { background: var(--surface); padding: 4px 16px 32px; }
+  @media (min-width: 1024px) {
+    .bar-in { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 24px; }
+    .bar-in > .side { grid-column: 2; }
+    .work { grid-template-columns: minmax(0, 1fr) 460px; }
+    #map { position: sticky; top: 0; height: 100vh; }
+    #panel { border-left: 1px solid var(--line); min-height: 100vh; }
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
+  }
+  :root[data-theme="dark"] .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
+
+  /* Sections: a heading and a rule, no cards. */
+  section { padding: 16px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  h2 { font-size: 16px; line-height: 1.3; margin: 0 0 10px; font-weight: 650; }
+  h3 { font-size: 14px; margin: 14px 0 6px; font-weight: 650; color: var(--ink-2); }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .empty { color: var(--ink-2); }
+  .empty p { margin: 12px 0; max-width: 60ch; }
+
+  .verdict { font-size: 18px; line-height: 1.35; margin: 0 0 4px; font-weight: 600; text-wrap: balance; }
+  .verdict-sub { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; }
+  .pos { display: inline-flex; align-items: center; gap: 6px; }
+  .pos i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  /* Price ruler: typical range of notarial prices as a band, median tick, the offer as a pin. */
+  .ruler { margin: 10px 0 18px; }
+  .ruler-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+  .ruler-head b { font-weight: 600; }
+  .ruler-head span { color: var(--ink-2); white-space: nowrap; }
+  .track { position: relative; height: 28px; margin-top: 4px; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 13px; height: 2px; background: var(--line); }
+  .band { position: absolute; top: 7px; height: 14px; background: var(--band); border: 1px solid var(--line-2); border-radius: 3px; }
+  .median { position: absolute; top: 4px; width: 2px; height: 20px; background: var(--ink-2); }
+  .pin { position: absolute; top: 0; width: 0; height: 28px; }
+  .pin::before { content: ""; position: absolute; left: -1px; top: 0; width: 2px; height: 28px; background: var(--ink); }
+  .pin::after { content: ""; position: absolute; left: -6px; top: -4px; width: 12px; height: 12px; border-radius: 50%;
+                background: var(--ink); border: 2px solid var(--surface); }
+  .ruler-foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .ruler.nodata .track { display: none; }
+
+  dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; font-size: 14px; }
+  dl.facts dt { color: var(--ink-2); }
+  dl.facts dd { margin: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12.5px; padding: 4px 6px 6px 0;
+       border-bottom: 1px solid var(--line-2); }
+  td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  td:last-child, th:last-child { padding-right: 0; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; white-space: nowrap; }
+  tbody tr[data-i] { cursor: pointer; }
+  tbody tr[data-i]:hover td { background: var(--ground); }
+  td small { display: block; color: var(--muted); font-size: 12px; }
+  .rank { display: inline-grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--ink);
+          font-size: 11px; font-weight: 700; background: var(--surface); }
+  .sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--nuisance); vertical-align: middle;
+        margin-right: 6px; }
+  .sw.drogi { border-top: 3px dashed var(--road); }
+  .sw.na_co_dzien { width: 10px; height: 10px; border: 2px solid var(--daily); background: var(--surface);
+                    transform: rotate(45deg); margin: 0 10px 0 4px; }
+  .missing { color: var(--muted); }
+  details.raw > summary { cursor: pointer; color: var(--ink-2); min-height: 36px; display: flex; align-items: center; }
+  pre { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 6px 0 0; }
+
+  /* Map chrome themed from the same tokens. */
+  .leaflet-container { font: inherit; background: var(--band); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+  .leaflet-popup-content { margin: 10px 12px; font-size: 13.5px; line-height: 1.45; }
+  .leaflet-control-layers, .leaflet-bar a { background: var(--surface); color: var(--ink); }
+  .legend { background: var(--surface); color: var(--ink); padding: 8px 10px; border-radius: 6px; font-size: 12px;
+            line-height: 1.7; box-shadow: 0 1px 4px rgba(0,0,0,.25); max-width: 210px; }
+  .legend summary { cursor: pointer; font-weight: 600; }
+  .key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; }
+  .sq { width: 18px !important; height: 18px !important; margin: -9px 0 0 -9px !important; display: grid; place-items: center;
+        border: 2px solid var(--ink); background: var(--surface); color: var(--ink); font: 700 11px/1 system-ui, sans-serif; }
+  .dia { width: 10px !important; height: 10px !important; margin: -5px 0 0 -5px !important; transform: rotate(45deg);
+         border: 2px solid var(--daily); background: var(--surface); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <path d="M3 10.5 11 4l8 6.5V19H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M7 19v-5h8v5" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      Mieszkanie100
+    </div>
+    <form id="f" class="side" novalidate>
+      <div class="ask">
+        <label class="sr" for="link">Link do ogłoszenia</label>
+        <input id="link" name="link" type="url" inputmode="url" autocomplete="off"
+               placeholder="Wklej link do ogłoszenia: Otodom, Gratka, Morizon, OLX…">
+        <button id="go" type="submit">Pokaż kartę</button>
+      </div>
+      <div class="opts">
+        <label>Promień <select name="promien"><option>300</option><option selected>500</option><option>1000</option></select> m</label>
+        <label>Okres <select name="miesiace"><option>12</option><option selected>24</option><option>36</option><option>60</option></select> mies.</label>
+        <button type="button" class="linkish" id="manual-toggle" aria-expanded="false" aria-controls="manual">Wpisz dane ręcznie</button>
+      </div>
+        <div class="manual" id="manual" hidden>
+          <div class="manual-grid">
+            <label>Ulica <input name="ulica" placeholder="np. Szurmana"></label>
+            <label>Cena, zł <input name="cena" inputmode="numeric"></label>
+            <label>Metraż, m² <input name="metraz" inputmode="decimal"></label>
+            <label>Rynek <select name="rynek"><option value="">nie wiem</option><option value="wtorny">wtórny</option>
+              <option value="pierwotny">pierwotny</option></select></label>
+            <label>Rok budowy <input name="rok" inputmode="numeric"></label>
+          </div>
+        </div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</header>
+<main class="work">
+  <div id="map" role="region" aria-label="Mapa: oferta, sprzedaże z RCN, podobne oferty i otoczenie"></div>
+  <div id="panel" aria-live="polite">
+    <div class="empty" id="empty">
+      <section>
+        <h2>Jak to działa</h2>
+        <p>Wklej link do ogłoszenia. Karta pokaże cenę ofertową na tle cen z aktów notarialnych (RCN) w promieniu,
+           wiek budynku, podobne oferty z zapisanych wyników wyszukiwania i otoczenie z OpenStreetMap.</p>
+        <p>Bez linku: rozwiń „Wpisz dane ręcznie” i podaj ulicę, cenę i metraż. Położenie będzie wtedy środkiem ulicy.</p>
+      </section>
+    </div>
+    <div id="result" hidden>
+      <section id="s-cena">
+        <h2>Cena na tle sprzedaży</h2>
+        <p class="verdict" id="verdict"></p>
+        <p class="verdict-sub" id="verdict-sub"></p>
+        <div id="rulers"></div>
+        <p class="note">Pas to typowy zakres (połowa sprzedaży, 25.–75. percentyl), kreska to mediana, pinezka to oferta.
+           Ceny ofertowe i transakcyjne to nie to samo: to porównanie, nie wycena.</p>
+      </section>
+      <section id="s-oferta"><h2>Oferta</h2><dl class="facts" id="facts"></dl></section>
+      <section id="s-budynek"><h2>Budynek</h2><dl class="facts" id="building"></dl></section>
+      <section id="s-podobne"><h2 id="similar-h">Podobne oferty w okolicy</h2><div id="similar"></div></section>
+      <section id="s-otoczenie"><h2 id="around-h">Otoczenie</h2><div id="around"></div></section>
+      <section id="s-sprzedaze"><h2>Najbliższe sprzedaże</h2><div id="sales"></div></section>
+      <section>
+        <details class="raw"><summary>Pełna karta tekstowa</summary><pre id="card"></pre></details>
+      </section>
+    </div>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const zl = v => v == null ? "–" : Math.round(v).toLocaleString("pl-PL");
+const m2 = v => v == null ? "–" : (+v).toLocaleString("pl-PL", {maximumFractionDigits: 1});
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const POS = {"poniżej typowego zakresu": "--cheap", "w typowym zakresie": "--typical", "powyżej typowego zakresu": "--dear"};
+const GROUP_NAMES = {uciazliwosci: "Uciążliwości", drogi: "Drogi w budowie i planowane", na_co_dzien: "Na co dzień"};
+const MARKET = {wtorny: "wtórny", pierwotny: "pierwotny"};
+const SHORT = {"Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)": "Wtórny, budynki do 10 lat"};
+
+const map = L.map("map", {zoomControl: true}).setView([50.2299, 18.9906], 13);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; autorzy OpenStreetMap (ODbL) | ceny: RCN, GUGiK"
+}).addTo(map);
+const control = L.control.layers(null, null, {collapsed: true}).addTo(map);
+let layers = [], saleMarkers = [], similarMarkers = [];
+
+const legend = L.control({position: "bottomright"});
+legend.onAdd = () => {
+  const d = L.DomUtil.create("details", "legend");
+  d.open = window.innerWidth >= 1024;
+  d.innerHTML = `<summary>Legenda</summary>
+    <span class="key" style="background:${css("--cheap")}"></span>sprzedaż poniżej typowej ceny<br>
+    <span class="key" style="background:${css("--typical")}"></span>w typowym zakresie<br>
+    <span class="key" style="background:${css("--dear")}"></span>powyżej typowej ceny<br>
+    <span class="key" style="border:3px solid ${css("--ink")}"></span>obwódka: budynek do 10 lat<br>
+    <span class="key" style="border:4px solid ${css("--ink")};width:16px;height:16px;vertical-align:-4px"></span>oferta<br>
+    <span class="key" style="border-radius:0;border:2px solid ${css("--ink")}"></span>podobna oferta (numer z listy)<br>
+    <span class="sw"></span>uciążliwość<br><span class="sw drogi"></span>droga w budowie lub planowana<br>
+    <span class="sw na_co_dzien"></span>szkoła, przedszkole, przystanek`;
+  L.DomEvent.disableClickPropagation(d);
+  return d;
+};
+legend.addTo(map);
+
+function clearMap() {
+  layers.forEach(l => { map.removeLayer(l); control.removeLayer(l); });
+  layers = []; saleMarkers = []; similarMarkers = [];
+}
+function overlay(layer, name) { layer.addTo(map); layers.push(layer); control.addOverlay(layer, name); }
+
+function priceColor(v, ref) {
+  if (!ref || ref.p25 == null) return css("--typical");
+  return v < ref.p25 ? css("--cheap") : v > ref.p75 ? css("--dear") : css("--typical");
+}
+
+function drawMap(d) {
+  clearMap();
+  const ref = d.porownania.find(c => c.etykieta === d.porownanie.rynek);
+  const circle = L.circle(d.srodek, {radius: d.promien_m, color: css("--ink-2"), weight: 1, dashArray: "4 4", fill: false,
+                                      interactive: false});
+  const o = d.oferta;
+  const offer = L.circleMarker(d.srodek, {radius: 16, color: css("--ink"), weight: 4, fill: false})
+    .bindPopup(`<b>${esc(o.tytul || "Oferta")}</b><br>${zl(o.cena)} zł, ${m2(o.powierzchnia_m2)} m², ${zl(o.cena_m2)} zł/m²` +
+               (d.przyblizone ? "<br>położenie przybliżone" : ""));
+  saleMarkers = d.transakcje.map(t => L.circleMarker(t.punkt, {
+      radius: 7, weight: t.nowy ? 3 : 1.5, color: t.nowy ? css("--ink") : css("--surface"),
+      fillColor: priceColor(t.cena_m2, ref), fillOpacity: .9})
+    .bindPopup(`<b>${zl(t.cena_m2)} zł/m²</b>, ${m2(t.pow_m2)} m², rynek ${esc(t.rynek)}<br>${esc(t.adres)}, ${esc(t.data)}<br>
+                Budynek: ${esc(t.wiek)}<br>${t.odleglosc_m} m od oferty`));
+  overlay(L.layerGroup([circle, offer]), "Oferta i promień");
+  overlay(L.layerGroup(saleMarkers), "Sprzedaże (RCN)");
+  similarMarkers = d.podobne.map((p, i) => L.marker(p.punkt, {
+      icon: L.divIcon({className: "sq", html: String(i + 1), iconSize: null})})
+    .bindPopup(`<b>${i + 1}. ${esc(p.tytul || p.portal)}</b><br>${zl(p.cena)} zł, ${m2(p.powierzchnia_m2)} m², ${zl(p.cena_m2)} zł/m²<br>
+                ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>`));
+  if (similarMarkers.length) overlay(L.layerGroup(similarMarkers), "Podobne oferty");
+  const groups = {};
+  d.otoczenie.forEach(it => {
+    const g = it.grupa;
+    const color = g === "na_co_dzien" ? css("--daily") : g === "drogi" ? css("--road") : css("--nuisance");
+    const layer = L.geoJSON(it.geojson, {
+      style: {color, weight: g === "uciazliwosci" ? 2.5 : 3, dashArray: g === "drogi" ? "6 5" : null, fillOpacity: .08},
+      pointToLayer: (f, ll) => g === "na_co_dzien" ? L.marker(ll, {icon: L.divIcon({className: "dia", iconSize: null})})
+                                                   : L.circleMarker(ll, {radius: 5, color, weight: 2, fillOpacity: .3})})
+      .bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty` +
+                 (it.szczegoly ? "<br>" + esc(it.szczegoly) : ""));
+    (groups[g] = groups[g] || L.layerGroup()).addLayer(layer);
+  });
+  ["uciazliwosci", "drogi", "na_co_dzien"].forEach(g => groups[g] && overlay(groups[g], GROUP_NAMES[g]));
+  map.fitBounds(circle.getBounds(), {padding: [24, 24]});
+}
+
+function ruler(c, price, lo, hi) {
+  const pct = v => (100 * (v - lo) / (hi - lo)).toFixed(2) + "%";
+  if (c.status === "brak_danych") {
+    return `<div class="ruler nodata"><div class="ruler-head"><b>${esc(SHORT[c.etykieta] || c.etykieta)}</b><span>brak sprzedaży w tym oknie</span></div></div>`;
+  }
+  const small = c.status === "za_mala_proba" ? ", za mała próba" : "";
+  return `<div class="ruler">
+    <div class="ruler-head"><b>${esc(SHORT[c.etykieta] || c.etykieta)}</b><span>mediana ${zl(c.mediana)} zł/m²</span></div>
+    <div class="track" role="img" aria-label="Typowo ${zl(c.p25)} do ${zl(c.p75)} zł za metr, oferta ${zl(price)}">
+      <div class="band" style="left:${pct(c.p25)};width:calc(${pct(c.p75)} - ${pct(c.p25)})"></div>
+      <div class="median" style="left:${pct(c.mediana)}"></div>
+      ${price != null ? `<div class="pin" style="left:${pct(Math.min(Math.max(price, lo), hi))}"></div>` : ""}
+    </div>
+    <div class="ruler-foot"><span>typowo ${zl(c.p25)}–${zl(c.p75)} zł/m²</span><span>próbka ${c.proba}${small}</span></div></div>`;
+}
+
+function renderPrice(d) {
+  const o = d.oferta, price = o.cena_m2;
+  const tone = d.polozenie ? `<span class="pos"><i style="background:${css(POS[d.polozenie])}"></i>${esc(d.polozenie)}</span>` : "";
+  $("verdict").innerHTML = price == null ? "Oferta bez ceny za m², brak porównania."
+    : d.polozenie ? `${zl(price)} zł/m²: ${tone}` : `${zl(price)} zł/m²: brak porównania`;
+  const ctx = `${d.porownanie.rynek.toLowerCase()}, promień ${d.promien_m} m, ${d.okno[0]} do ${d.okno[1]}`;
+  $("verdict-sub").textContent = `Porównanie: ${ctx}.` +
+    (d.polozenie_nowe ? ` Na tle budynków do 10 lat: ${d.polozenie_nowe}.` : "");
+  const vals = d.porownania.filter(c => c.status !== "brak_danych").flatMap(c => [c.p25, c.p75]);
+  if (price != null) vals.push(price);
+  const lo = Math.min(...vals) * 0.96, hi = Math.max(...vals) * 1.04;
+  $("rulers").innerHTML = d.porownania.map(c => ruler(c, price, lo, hi)).join("");
+}
+
+function fact(label, value) { return value == null || value === "" ? "" : `<dt>${label}</dt><dd>${value}</dd>`; }
+
+function renderOffer(d) {
+  const o = d.oferta;
+  const mentions = o.wzmianki && Object.keys(o.wzmianki).length
+    ? Object.entries(o.wzmianki).map(([k, v]) => esc(k.replace("_", " ")) + (v === true ? "" : " " + esc(v))).join(", ") +
+      ` <small class="missing">(${o.wzmianki_zrodlo === "cała strona" ? "z całej strony, mniej pewne" : "z treści ogłoszenia"})</small>`
+    : null;
+  $("facts").innerHTML = [
+    fact("Cena", o.cena != null ? `${zl(o.cena)} zł` : null),
+    fact("Metraż", o.powierzchnia_m2 != null ? `${m2(o.powierzchnia_m2)} m²` : null),
+    fact("Cena za m²", o.cena_m2 != null ? `${zl(o.cena_m2)} zł` : null),
+    fact("Pokoje", o.pokoje), fact("Piętro", o.pietro),
+    fact("Rynek", MARKET[o.rynek] || "nie podano (porównanie z wtórnym)"),
+    fact("Adres", esc([o.ulica, o.dzielnica, o.miejscowosc].filter(Boolean).join(", ")) +
+         (d.przyblizone ? ` <small class="missing">położenie przybliżone</small>` : "")),
+    fact("Inwestycja", o.inwestycja ? esc(o.inwestycja) : null),
+    fact("W treści", mentions),
+    fact("Źródło", o.url ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.portal)}, otwórz ogłoszenie</a>` : esc(o.portal)),
+  ].join("");
+  const b = d.budynek;
+  $("building").innerHTML = [
+    fact("Rok budowy", o.rok_budowy ? `${esc(o.rok_budowy)} <small class="missing">z ogłoszenia</small>` : `<span class="missing">ogłoszenie nie podaje</span>`),
+    fact("Wiek z RCN", b.rcn ? `${esc(b.rcn)} <small class="missing">najbliższy budynek ze sprzedażami, ${b.odleglosc_m} m</small>`
+                             : `<span class="missing">nie ustalono: ${esc(b.powod)}</span>`),
+  ].join("");
+}
+
+function renderSimilar(d) {
+  $("similar-h").textContent = `Podobne oferty w promieniu ${d.promien_m} m`;
+  if (!d.podobne.length) {
+    $("similar").innerHTML = `<p class="empty">Brak zapisanych ofert o metrażu ±15% w tym promieniu. Wyniki odświeżają
+      polecenia <code>python3 rcn/olx.py szukaj</code> i <code>python3 rcn/otodom.py szukaj</code> na Raspberry Pi.</p>`;
+    return;
+  }
+  const rows = d.podobne.map((p, i) => `<tr data-i="${i}" data-kind="similar">
+      <td><span class="rank">${i + 1}</span></td>
+      <td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.tytul || "ogłoszenie")}</a>
+          <small>${esc(p.portal)}${p.takze_na.length ? ", także " + esc(p.takze_na.join(", ")) : ""}; położenie ${esc(p.polozenie)}; widziana ${esc(p.ostatnio)}</small></td>
+      <td class="num">${zl(p.cena_m2)}<small>${m2(p.powierzchnia_m2)} m²</small></td><td class="num">${p.odleglosc_m} m</td></tr>`).join("");
+  $("similar").innerHTML = `<table><thead><tr><th></th><th>Oferta</th><th class="num">zł/m²</th>
+    <th class="num">Odl.</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note">Metraż ±15%, z zapisanych wyników wyszukiwania (bez pobierania stron); ogłoszenie mogło już zniknąć.</p>`;
+}
+
+function renderAround(d) {
+  $("around-h").textContent = `Otoczenie do ${zl(d.promien_otoczenia_m)} m`;
+  const out = ["uciazliwosci", "drogi", "na_co_dzien"].map(g => {
+    const all = d.otoczenie_lista.filter(c => c.grupa === g);
+    const found = all.filter(c => c.odleglosc_m != null).sort((a, b) => a.odleglosc_m - b.odleglosc_m);
+    const missing = all.filter(c => c.odleglosc_m == null).map(c => esc(c.etykieta));
+    const rows = found.map(c => `<tr>
+        <td><span class="sw ${g}"></span>${esc(c.etykieta)}${c.nazwa || c.szczegoly ?
+          `<small>${esc([c.nazwa, c.szczegoly].filter(Boolean).join(", "))}</small>` : ""}</td>
+        <td class="num">${c.odleglosc_m} m</td></tr>`).join("");
+    return `<h3>${GROUP_NAMES[g]}</h3>` + (rows ? `<table><thead><tr><th>Najbliższy obiekt</th><th class="num">Odległość</th></tr></thead>
+      <tbody>${rows}</tbody></table>` : "") +
+      (missing.length ? `<p class="note">Brak w danych: ${missing.join(", ")}.</p>` : "");
+  });
+  $("around").innerHTML = out.join("") + `<p class="note">OpenStreetMap to dane społeczności: brak obiektu w danych
+    nie znaczy, że go nie ma.</p>`;
+}
+
+function renderSales(d) {
+  if (!d.transakcje.length) { $("sales").innerHTML = `<p class="empty">Brak sprzedaży w tym promieniu i okresie.</p>`; return; }
+  const rows = d.transakcje.slice(0, 12).map((t, i) => `<tr data-i="${i}" data-kind="sale">
+      <td class="num">${t.odleglosc_m} m</td><td>${esc(t.adres)}<small>${esc(t.data)}, ${esc(t.rynek)}; ${esc(t.wiek)}</small></td>
+      <td class="num">${zl(t.cena_m2)}<small>${m2(t.pow_m2)} m²</small></td></tr>`).join("");
+  $("sales").innerHTML = `<table><thead><tr><th class="num">Odl.</th><th>Adres</th>
+    <th class="num">zł/m²</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note">${d.transakcje.length} sprzedaży na mapie, tu ${Math.min(12, d.transakcje.length)} najbliższych. Źródło: RCN (akty notarialne).</p>`;
+}
+
+$("panel").addEventListener("click", ev => {
+  const row = ev.target.closest("tr[data-i]");
+  if (!row || ev.target.closest("a")) return;
+  const list = row.dataset.kind === "similar" ? similarMarkers : saleMarkers;
+  const m = list[+row.dataset.i];
+  if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); m.openPopup(); if (window.innerWidth < 1024) $("map").scrollIntoView(); }
+});
+
+async function run(params) {
+  const st = $("status"), go = $("go");
+  st.className = ""; st.textContent = "Liczę kartę… pobranie ogłoszenia trwa kilka sekund.";
+  go.disabled = true; go.textContent = "Liczę…"; $("panel").setAttribute("aria-busy", "true");
+  try {
+    const r = await fetch("/api/karta?" + params);
+    const d = await r.json();
+    if (!d.ok) { st.className = "err"; st.textContent = d.blad; return; }
+    st.textContent = `Sprzedaży na mapie: ${d.transakcje.length}. Podobnych ofert: ${d.podobne.length}.`;
+    $("empty").hidden = true; $("result").hidden = false;
+    renderPrice(d); renderOffer(d); renderSimilar(d); renderAround(d); renderSales(d);
+    $("card").textContent = d.karta;
+    drawMap(d);
+    history.replaceState(null, "", "?" + params);
+  } catch (e) {
+    st.className = "err"; st.textContent = "Brak połączenia z serwerem na Raspberry Pi. Sprawdź, czy rcn/mapa.py działa.";
+  } finally {
+    go.disabled = false; go.textContent = "Pokaż kartę"; $("panel").removeAttribute("aria-busy");
+  }
+}
+
+function toggleManual(open) {
+  $("manual").hidden = !open;
+  $("manual-toggle").setAttribute("aria-expanded", String(open));
+  $("manual-toggle").textContent = open ? "Ukryj wpis ręczny" : "Wpisz dane ręcznie";
+}
+$("manual-toggle").addEventListener("click", () => toggleManual($("manual").hidden));
+
+$("f").addEventListener("submit", ev => {
+  ev.preventDefault();
+  run(new URLSearchParams([...new FormData(ev.target)].filter(([k, v]) => v)).toString());
+});
+
+// A shared address (?link=… or ?ulica=…) fills the form and shows the card straight away.
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (!q.get("link") && !q.get("ulica")) return;
+  for (const [k, v] of q) { const el = $("f").elements[k]; if (el) el.value = v; }
+  if (q.get("ulica")) toggleManual(true);
+  run(q.toString());
+})();
+</script>
+</body>
+</html>

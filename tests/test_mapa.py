@@ -66,6 +66,26 @@ class CardJsonTests(unittest.TestCase):
         self.assertAlmostEqual(lat, tk.LAT + 0.0027, places=5)
         self.assertEqual(kinds["linia_wn"]["geojson"]["type"], "LineString")
 
+    def test_sections_for_the_page(self):
+        from rcn.olx import OfferStore
+        store = OfferStore(self.ctx.oferty_db)
+        store.upsert([{"portal": "olx", "id": "9", "url": "https://www.olx.pl/d/oferta/9", "tytul": "Obok",
+                       "cena": 700000, "powierzchnia_m2": 62.0, "cena_m2": 11290.32, "ulica": None,
+                       "miejscowosc": "Katowice", "lat": tk.LAT + 0.001, "lon": tk.LON,
+                       "lokalizacja_przyblizona": True}], "2026-10-27")
+        store.close()
+        status, body = mapa.card_json(self.ctx, {"ulica": "Szurmana", "cena": "839000", "metraz": "65"})
+        self.assertEqual([p["id"] for p in body["podobne"]], ["9"])
+        self.assertEqual(body["podobne"][0]["polozenie"], "przybliżone")
+        labels = [c["etykieta"] for c in body["porownania"]]
+        self.assertEqual(labels, ["Rynek wtórny", "Rynek pierwotny",
+                                  "Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)"])
+        near = {c["kategoria"]: c for c in body["otoczenie_lista"]}
+        self.assertEqual(near["przedszkole"]["grupa"], "na_co_dzien")
+        self.assertAlmostEqual(near["przedszkole"]["odleglosc_m"], 240, delta=2)    # from the street centre
+        self.assertIsNone(near["kolej"]["odleglosc_m"])
+        self.assertEqual(body["budynek"]["powod"], "położenie oferty jest przybliżone")
+
     def test_only_portal_links_are_fetched(self):
         for link in ("http://192.168.1.1/admin", "file:///etc/passwd", "https://otodom.pl.evil.com/x",
                      "https://example.com/oferta"):

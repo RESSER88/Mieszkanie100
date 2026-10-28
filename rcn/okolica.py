@@ -52,6 +52,24 @@ def find_center(con: sqlite3.Connection, street: str,
     return sum(ys) / len(ys), sum(xs) / len(xs), len(ys)
 
 
+def street_index(con: sqlite3.Connection) -> List[Tuple[str, str, float, float, int]]:
+    """Per street and town: (normalized street, town key, sum northing, sum easting, n), for fast centres."""
+    return [(_norm_street(name), (town or "").casefold(), sy, sx, n) for name, town, sy, sx, n in con.execute(
+        "SELECT ulica, miejscowosc, SUM(y_pl1992), SUM(x_pl1992), COUNT(*) FROM lokale"
+        " WHERE ulica IS NOT NULL AND y_pl1992 IS NOT NULL AND x_pl1992 IS NOT NULL GROUP BY ulica, miejscowosc")]
+
+
+def center_from_index(index, street: str, city: str = "Katowice") -> Optional[Tuple[float, float, int]]:
+    """Same result as find_center, from street_index (no scan of every record)."""
+    needle, city_key = _norm_street(street), city.casefold()
+    sy = sx = 0.0
+    n = 0
+    for hay, town, y, x, count in index:
+        if town == city_key and (needle in hay or (len(hay) >= 6 and hay in needle)):
+            sy, sx, n = sy + y, sx + x, n + count
+    return (sy / n, sx / n, n) if n else None
+
+
 def _is_whole_share(text: Optional[str]) -> bool:
     """True for a whole unit ("1/1", "100/100") or when the share is missing or unreadable."""
     if not text:
