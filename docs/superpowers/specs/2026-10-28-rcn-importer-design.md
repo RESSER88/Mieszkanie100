@@ -129,3 +129,21 @@ Okolica ul. Braci Mniejszych, 500 m, 24 miesiące (środek z 129 rekordów):
 Przyczyna (sprawdzona na migawce deweloperuch dla Katowic): warstwa `ms:lokale` obejmuje nie tylko mieszkania. Lokale o funkcji mieszkalnej mają tam medianę 11 174 zł/m², a lokale o innych funkcjach (kody 5 i 6, garaże i podobne) 416 i 839 zł/m². Deweloperzy sprzedają osobno miejsca postojowe i komórki, więc na rynku pierwotnym przeważają. Nawet wśród mieszkań minimum to 1 zł/m², co wskazuje na sprzedaże udziałów lub transakcje poza wolnym rynkiem.
 
 Poprawka w `rcn/okolica.py` (decyzja autora, do akceptacji użytkownika): do porównania trafia tylko sprzedaż całego lokalu (`NIER_UDZIAL` równy jedności, np. `1/1` lub `100/100`) o funkcji `mieszkalna` na wolnym rynku (`TRAN_RODZAJ_TRANS = wolnyRynek`). Brakujący udział lub rodzaj transakcji nie wyklucza rekordu. Raport podaje liczby odrzuconych rekordów wg powodu, żeby nic nie ginęło po cichu. `scripts/pi_check.sh` pokazuje rozkład funkcji lokalu, udziałów i rodzajów transakcji, żeby sprawdzić te założenia na prawdziwych danych.
+
+### Raport po poprawce (Raspberry Pi, 2026-10-28, kod `575236c`, 44 testy)
+
+Rozkład wartości w 41 845 rekordach lokali:
+
+- Funkcja lokalu: `mieszkalna` 36 580, `garaz` 3910, `inna` 1195, `handlowoUslugowa` 144, `biurowa` 16.
+- Udział: `1/1` 38 958, reszta to ułamki, w większości udziały w halach garażowych (np. `3/1112`, `2/290`, `1/145`) oraz połowy (`1/2`, 168).
+- Rodzaj transakcji: `wolnyRynek` 39 622, `sprzedazZBonifikata` 1375 (zwykle sprzedaż mieszkań gminnych najemcom z bonifikatą), `sprzedazBezprzetargowa` 539, `sprzedazPrzetargowa` 297, `sprzedazWPostepowaniuEgzekucyjnym` 12.
+
+Założenia filtrów potwierdzone na danych. Uwaga: `sprzedazPrzetargowa` (przetarg) bywa bliska ceny rynkowej, ale na razie jest wykluczona razem z resztą, ostrożnie.
+
+Okolica ul. Braci Mniejszych, 500 m, 24 miesiące:
+
+- Rynek wtórny: próbka 75, okres 2024-10-31 .. 2026-09-02, mediana 10 929 zł/m², zakres 9 942 .. 12 155 zł/m², min 4 241, max 19 577, mediana ceny 605 000 zł.
+- Rynek pierwotny: próbka 9 (ostrzeżenie o małej próbie), okres 2024-11-12 .. 2025-08-19, mediana 10 399 zł/m², zakres 9 200 .. 11 692 zł/m².
+- Odrzucone: 15 lokali niemieszkalnych, 1 udział, 33 transakcje poza wolnym rynkiem.
+
+Przed poprawką rynek pierwotny miał próbkę 40 z medianą 331 zł/m², więc 31 z 40 rekordów to były garaże, udziały lub sprzedaż poza wolnym rynkiem.
