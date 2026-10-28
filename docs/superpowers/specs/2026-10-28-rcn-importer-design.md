@@ -64,11 +64,25 @@ Raspberry Pi, 2026-10-28, `--teryt 2469 --layer lokale --page-size 200 --max-pag
 - Raport z 600 rekordów: zakres dat 2013-02-19 .. 2016-04-01 (rekordy rosnąco wg `gid` są też z grubsza rosnące wg daty), bez powierzchni 0, bez ceny obiektu 135 (22,5%), cena za m² policzona dla 445, powtórzonych kluczy naturalnych 0.
 - Status kompletności: `NIEZWERYFIKOWANA`, zgodnie z założeniem.
 
-Otwarte pytania po teście:
+Pełny import lokali, Raspberry Pi, 2026-10-28, `--teryt 2469 --layer lokale --page-size 200`:
 
-- Dlaczego 22,5% rekordów nie ma ceny obiektu (`LOK_CENA_BRUTTO` puste). Sprawdzić, czy to transakcje pakietowe z ceną tylko na poziomie transakcji.
-- Pełny import (bez `--max-pages`) i porównanie liczby rekordów z niezależnym źródłem.
-- Adres pliku GeoPackage (`curl -I`) nadal niesprawdzony.
+- Przerwanie (Ctrl+C) i wznowienie działają: po przerwaniu pierwsza strona kończyła się na `last_gid` większym o 200 od zapisanego checkpointu. Przerwany przez `SIGINT` import kończy się kodem 130 z zapisanym checkpointem.
+- Przez pomyłkę działały chwilowo dwa importy naraz na tej samej bazie. Oba zatrzymano. Zapis po `gid` jest idempotentny, więc dane nie ucierpiały, ale licznik stron w checkpoincie (`stron=210`) jest zawyżony i nie oznacza liczby unikalnych stron.
+- Import zakończył się sam. Baza: 41 845 rekordów lokali, `last_gid=47990586`.
+- Zakres dat 2012-08-23 .. 2026-09-14. Rozkład wg roku: 2012: 367, 2013: 982, 2014: 1090, 2015: 1149, 2016: 1294, 2017: 1571, 2018: 1792, 2019: 1770, 2020: 1548, 2021: 5409, 2022: 4611, 2023: 5243, 2024: 6740, 2025: 4698, 2026: 3581.
+- Bez ceny obiektu: 4476 (10,7%). Bez powierzchni: 1. Cena za m² policzona dla 29 492 (70,5%). Pozostałe nie mają ceny lub powierzchni albo ceny transakcji, nieruchomości i lokalu się różnią (transakcje pakietowe). Podział tych przyczyn nie został jeszcze zmierzony.
+- Powtórzone klucze naturalne (wiele wersji transakcji): 7.
+- Status kompletności: `NIEZWERYFIKOWANA`.
+
+Obserwacje do wyjaśnienia:
+
+- Skok liczby rekordów z 1548 (2020) do 5409 (2021). Może odzwierciedlać rynek albo zmianę zakresu lub sposobu wprowadzania danych do rejestru. Nie wiadomo, bez sprawdzenia rozkładu miesięcznego.
+- Migawka deweloperuch (2157 transakcji, 2338 lokali, wrzesień 2024 – wrzesień 2025) ma wyraźnie mniej lokali niż WFS w podobnym okresie (2024: 6740, 2025: 4698 rekordów w całych latach). Migawka jest więc najpewniej niepełna i nie nadaje się jako liczba referencyjna dla kompletności. Dokładne porównanie wymaga zliczenia WFS w tym samym oknie dat.
+
+Otwarte pytania:
+
+- Niezależne źródło liczby referencyjnej (plik GeoPackage dla powiatu 2469). Adres pliku (`curl -I`) nadal niesprawdzony.
+- Test warstw `budynki` i `dzialki` (identyfikatory obiektów zgadnięte).
 
 ## Test akceptacyjny
 
