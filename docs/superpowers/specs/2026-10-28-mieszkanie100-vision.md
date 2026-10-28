@@ -18,6 +18,7 @@ Narzędzie działa na Raspberry Pi. Wynik wygląda tak:
    - liczba transakcji i okres, z którego pochodzą,
    - lista kilku najbliższych podobnych transakcji (ulica, powierzchnia, cena, cena za m², data dokumentu),
    - ostrzeżenie, gdy próba jest za mała, żeby ufać medianie.
+1a. **Oferty kupna z portali** (życzenie użytkownika z 2026-10-28): Otodom, Gratka, OLX Nieruchomości, Morizon, Nieruchomosci-online.pl, Domiporta, Adresowo, RynekPierwotny. Nowe oferty z wybranych okolic trafiają do jednej bazy, a każda dostaje kartę z punktu 1. Szczegóły i ryzyka (regulaminy portali) w roadmapie, sekcja „Etap 4".
 2. **Przegląd obserwowanych okolic.** Okresowe zestawienie dla wybranych okolic (Osiedle Franciszkańskie i okolice ul. Szurmana, okolice ul. Braci Mniejszych, Osiedle Południe): jak zmieniają się ceny i ile było nowych transakcji.
 3. **Otoczenie i inwestycje** (późniejszy etap): przedszkola, szkoły, komunikacja, planowane inwestycje.
 
