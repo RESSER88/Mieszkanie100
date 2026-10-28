@@ -89,6 +89,42 @@ Na dziś pracujemy tylko na województwie śląskim, ale konstrukcja ma pozwala�
 3. Moduł `rcn/otoczenie.py`: najbliższy obiekt danego rodzaju od punktu (odległość w EPSG:2180 po przeliczeniu z WGS84) z testami na małym zestawie GeoJSON.
 4. Dodać wskaźniki do karty okolicy.
 
+## Wiedza o lokalizacji: uciążliwości w okolicy i planowane drogi (życzenie użytkownika, 2026-10-28)
+
+Użytkownik chce, żeby karta lokalizacji (etap 2 i 4) dawała też wiedzę o samej okolicy, nie tylko o cenach. Opisy poniżej to zakres funkcji, a stan źródeł jest oznaczony wprost. Wszystko to są informacje pomocnicze, a nie ocena atrakcyjności ani wpływu na wartość.
+
+### Blok A: uciążliwości w okolicy
+
+Co pokazujemy dla punktu (oferta, transakcja, ulica): najbliższe obiekty z odległością w metrach i rodzajem.
+
+| Obiekt | Źródło | Stan |
+|---|---|---|
+| Linie wysokiego napięcia (110 kV i więcej), słupy, stacje | OpenStreetMap, tag `power`, `voltage` | Do sprawdzenia na pliku PBF. Dane społeczności, mogą być niepełne. |
+| Linie najwyższego napięcia (220 i 400 kV) | Rządowe dane PSE | Źródło niesprawdzone: czy PSE udostępnia dane do pobrania, w jakim formacie i na jakich warunkach. |
+| Maszty i wieże telekomunikacyjne | OpenStreetMap (`man_made=mast`, `tower:type=communication`) | Do sprawdzenia. |
+| Kolej | OpenStreetMap (`railway=rail`; czynna czy zlikwidowana wynika z tagów) | Do sprawdzenia. |
+| Drogi główne | OpenStreetMap (`highway=motorway/trunk/primary`) | Do sprawdzenia. |
+| Przemysł | OpenStreetMap (`landuse=industrial`) | Do sprawdzenia. Etykieta „przemysł" bywa szeroka, nie oznacza uciążliwości. |
+| Inne (propozycja autora: składowiska, kamieniołomy, lotnisko) | OpenStreetMap | Do uzgodnienia z użytkownikiem. |
+
+Reguły: promienie są parametrami konfiguracji (domyślne wartości ustala użytkownik po obejrzeniu pierwszych wyników), brak obiektu w danych to „brak w danych OSM", a nie „nie ma", każda pozycja ma podane źródło i jego wiarygodność.
+
+### Blok B: planowane i budowane drogi
+
+Zakres podany przez użytkownika: drogi w budowie i w planach w promieniu 3 km od nieruchomości. Przy każdej odległość, docelowa klasa drogi i rok otwarcia, jeśli jest znany.
+
+- **OpenStreetMap (społeczność):** drogi w budowie i projektowane (`highway=construction`, `highway=proposed`, tagi `construction`, `opening_date`). Dane orientacyjne, nie oficjalne stanowisko GDDKiA, często niepełne i bez roku otwarcia.
+- **GDDKiA, Mapa Stanu Budowy Dróg:** oficjalne źródło dla dróg krajowych, autostrad i ekspresowych, według GDDKiA. Dotyczy tylko dróg zarządzanych przez GDDKiA, więc nie obejmuje dróg miejskich i powiatowych (np. inwestycje miasta Katowice). Dla nas właściwe jest województwo śląskie. Czy GDDKiA udostępnia te dane w formie do pobrania (API, plik), a nie tylko jako mapę w przeglądarce, nie zostało sprawdzone.
+- **Stan źródeł:** w opisie tej funkcji u mScanner dane o planowanych drogach są „chwilowo niedostępne" (wg wklejonego tekstu), więc nie zakładamy, że gotowe źródło istnieje. Plany drogowe miejskie (np. zarządca dróg Katowic, plan miejscowy, studium) to osobne źródła, jeszcze nierozpoznane.
+- **Zasada prezentacji:** każdą pozycję oznaczamy „OSM, orientacyjnie" albo „GDDKiA, oficjalnie". Rok otwarcia podajemy tylko, gdy jest w źródle. Brak roku to „rok nieznany", nie zgadujemy.
+
+### Zadania
+
+1. Spike na Raspberry Pi: z pliku PBF śląskiego wyfiltrować obiekty z bloku A i B, policzyć je w promieniu 3 km od ul. Braci Mniejszych, obejrzeć wyniki z użytkownikiem.
+2. Rozpoznanie źródeł oficjalnych: PSE (linie najwyższego napięcia), GDDKiA (stan budowy dróg), zarządca dróg w Katowicach. Dla każdego: czy są dane do pobrania, format, licencja, data sprawdzenia. Wynik w `docs/`.
+3. Moduł `rcn/otoczenie.py` (wspólny z infrastrukturą z OSM, zadanie 3 w sekcji o OSM): najbliższe obiekty wg rodzaju z odległością, z testami na małym zestawie GeoJSON.
+4. Dodać bloki A i B do karty okolicy, z oznaczeniem źródła i wiarygodności.
+
 ## Mapy i dane przestrzenne: Mapbox i OpenStreetMap (propozycja, 2026-10-28)
 
 Użytkownik chce użyć darmowej wersji Mapbox (repozytorium `mapbox/mapbox-agent-skills`) oraz OpenStreetMap (przewodnik wiki OSM dla biznesu). Poniżej to, co ustalono, i to, czego jeszcze nie sprawdzono. Wiki OSM i strony Mapbox są niedostępne ze środowiska chmurowego, więc zasady licencji i limity trzeba potwierdzić na Raspberry Pi lub po odblokowaniu domen.

@@ -20,7 +20,7 @@ Narzędzie działa na Raspberry Pi. Wynik wygląda tak:
    - ostrzeżenie, gdy próba jest za mała, żeby ufać medianie.
 1a. **Oferty kupna z portali** (życzenie użytkownika z 2026-10-28): Otodom, Gratka, OLX Nieruchomości, Morizon, Nieruchomosci-online.pl, Domiporta, Adresowo, RynekPierwotny. Nowe oferty z wybranych okolic trafiają do jednej bazy, a każda dostaje kartę z punktu 1. Szczegóły i ryzyka (regulaminy portali) w roadmapie, sekcja „Etap 4".
 2. **Przegląd obserwowanych okolic.** Okresowe zestawienie dla wybranych okolic (Osiedle Franciszkańskie i okolice ul. Szurmana, okolice ul. Braci Mniejszych, Osiedle Południe): jak zmieniają się ceny i ile było nowych transakcji.
-3. **Otoczenie i inwestycje** (późniejszy etap): przedszkola, szkoły, komunikacja, planowane inwestycje.
+3. **Wiedza o lokalizacji** (późniejszy etap): uciążliwości w okolicy (linie wysokiego napięcia, maszty, kolej, drogi główne, przemysł), drogi w budowie i planowane w promieniu 3 km (odległość, docelowa klasa, rok otwarcia, jeśli znany), a także przedszkola, szkoły, komunikacja i planowane inwestycje. Każda pozycja ma podane źródło i wiarygodność (np. „OSM, orientacyjnie" lub „GDDKiA, oficjalnie"). Szczegóły w roadmapie.
 
 Forma (propozycja): na początku polecenie w terminalu (`rcn/okolica.py`), potem prosta strona dostępna z telefonu w sieci domowej, serwowana z Raspberry Pi. Powiadomienia dopiero na końcu. Uzasadnienie: polecenie można sprawdzić od razu na danych, strona dodaje wygodę, ale nie zmienia liczb.
 
