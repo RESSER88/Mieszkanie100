@@ -38,7 +38,9 @@ def find_center(con: sqlite3.Connection, street: str,
     for name, town, y, x in con.execute(
             "SELECT ulica, miejscowosc, y_pl1992, x_pl1992 FROM lokale"
             " WHERE ulica IS NOT NULL AND y_pl1992 IS NOT NULL AND x_pl1992 IS NOT NULL"):
-        if (town or "").casefold() == city_key and needle in _norm_street(name):
+        hay = _norm_street(name)
+        # Portals and the registry abbreviate differently ("Szurmana" vs "Biskupa Tadeusza Szurmana").
+        if (town or "").casefold() == city_key and (needle in hay or (len(hay) >= 6 and hay in needle)):
             ys.append(y)
             xs.append(x)
     if not ys:

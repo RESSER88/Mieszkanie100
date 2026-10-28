@@ -48,6 +48,7 @@ Rozważone dla strony: Flask lub FastAPI (wygodniejsze, ale wymagają środowisk
 | 8 | Teren na karcie (wysokość, nachylenie) | Do zrobienia | 4, 7 |
 | 9 | Bezpieczeństwo na karcie (KMZB), jeśli rozpoznanie pozwoli | Do zrobienia | 4, 7 |
 | 10a | Ogłoszenia OLX dla Katowic: `rcn/olx.py szukaj` (wyszukiwanie GraphQL OLX, które 2026-10-28 odpowiedziało HTTP 200 na nasz uczciwy identyfikator: 986 ofert sprzedaży), filtr dzielnicy, metrażu, ceny i rynku, zapamiętywanie nowych ofert, porównanie każdej z RCN, karta z linku OLX z zapamiętanych wyników | Kod gotowy (14 testów), czeka na pierwsze uruchomienie na Raspberry Pi | 4b |
+| 10b | Ogłoszenia Otodom dla Katowic: `rcn/otodom.py szukaj` (strony wyników, 2026-10-28 HTTP 200 dla uczciwego identyfikatora), rozwijanie lokali z inwestycji deweloperów, porównanie z RCN po środku ulicy (wyniki nie mają współrzędnych), pełna karta z linku Otodom działa na prawdziwym ogłoszeniu | Kod gotowy (9 testów), czeka na pierwsze uruchomienie na Raspberry Pi | 4b |
 | 10 | Przeglądanie inwestycji deweloperów i ogłoszeń z rynku wtórnego dla wybranych okolic (życzenie użytkownika 2026-10-28), kolejne portale, monitor ofert (alerty e-mail), przegląd okolic, Docker, uruchamianie cykliczne, powiadomienia | Później | 5 |
 
 Pozycje 6 i 7 mogą iść równolegle z 3–5, bo nie zmieniają tego samego kodu.

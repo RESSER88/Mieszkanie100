@@ -229,3 +229,13 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/oferta.py probe "https://www.o
 - `rcn/olx.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100` (kod `bb567e9`): pobrano 986 z 986 ofert (wszystkie strony bez odmowy), pasuje 1: „Ville Garden | mieszkanie 4-pok. | A.33", 110,72 m², 1 815 808 zł, 16 400 zł/m², rynek pierwotny, powyżej typowego zakresu, ale porównanie z rynkiem pierwotnym ma tylko 3 sprzedaże w promieniu 500 m (za mała próba). Drugie uruchomienie: nowych 0, więc zapamiętywanie działa.
 - Wniosek: mieszkań od 100 m² w samej dzielnicy Ligota-Panewniki jest na OLX bardzo mało, a granice dzielnic OLX są umowne. Propozycja: filtr „w promieniu X km od ulicy" liczony ze współrzędnych ofert.
 - `rcn/oferta.py probe` dla strony wyników Otodom dla Katowic (kod `fcb3a3d`): HTTP 200 z uczciwym identyfikatorem, `next_data=1`, `ld_json=2`, 3172 pola kandydujące. Otodom nie blokuje naszego narzędzia.
+
+### Karta z linku Otodom i przeglądanie Otodom (2026-10-28)
+
+Karta dla prawdziwego ogłoszenia Otodom (ul. Widok, Dąb, 72,67 m², 828 438 zł, 11 400 zł/m², rynek pierwotny, rok 2025) zadziałała: odczyt, porównanie z RCN (wtórny próbka 10, pierwotny próbka 2) i otoczenie (linia 110 kV 132 m, GPZ Dąb 107 m, teren przemysłowy 126 m, przystanek 161 m). Wzmianki pochodziły z całej strony, czyli opis i lista cech nie zostały znalezione w `props.pageProps.ad`; do sprawdzenia, gdzie Otodom je teraz trzyma.
+
+Wyniki wyszukiwania Otodom (32 oferty na stronę) mają ulicę, dzielnicę, cenę, metraż, inwestycję, ale bez współrzędnych (`mapDetails.radius = 0`). `rcn/otodom.py szukaj` porównuje je z RCN od środka ulicy wyliczonego z rekordów RCN, z tą informacją przy każdej ofercie.
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/otodom.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100
+```

@@ -49,6 +49,14 @@ class FindCenterTests(unittest.TestCase):
         self.assertIsNotNone(ok.find_center(store.con, "ŁĄKOWA"))
         self.assertIsNotNone(ok.find_center(store.con, "ul. łąkowa"))
 
+    def test_long_portal_name_matches_short_registry_name(self):
+        store = make_store([rec(1, ulica="ul. Szurmana")])
+        self.assertIsNotNone(ok.find_center(store.con, "ul. Biskupa Tadeusza Szurmana"))
+
+    def test_short_registry_name_needs_six_letters(self):
+        store = make_store([rec(1, ulica="ul. Jana")])
+        self.assertIsNone(ok.find_center(store.con, "Jana Pawła II"))
+
     def test_none_when_street_missing(self):
         store = make_store([rec(1)])
         self.assertIsNone(ok.find_center(store.con, "Nieistniejąca"))

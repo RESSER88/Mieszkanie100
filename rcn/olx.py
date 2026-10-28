@@ -177,6 +177,15 @@ def _zl(value: Optional[float]) -> str:
     return "brak" if value is None else "{:,.0f}".format(value).replace(",", " ")
 
 
+def format_offer_line(o: Dict[str, Any], is_new: bool, comparison: str) -> str:
+    return "%s%s%s | %s | %s m² | %s zł | %s zł/m² | %s | %s | %s" % (
+        "[NOWA] " if is_new else "", o.get("tytul"), " (%s)" % o["inwestycja"] if o.get("inwestycja") else "",
+        o.get("dzielnica") or "dzielnica nieznana",
+        ("%g" % o["powierzchnia_m2"]).replace(".", ",") if o.get("powierzchnia_m2") else "?",
+        _zl(o.get("cena")), _zl(o.get("cena_m2")),
+        {"wtorny": "wtórny", "pierwotny": "pierwotny"}.get(o.get("rynek") or "", "rynek ?"), comparison, o.get("url"))
+
+
 def _comparison(offer, rcn_con, radius_m, months, today) -> str:
     from rcn import karta
     try:
@@ -235,12 +244,7 @@ def main(argv=None, today: Optional[date] = None) -> int:
     rcn = sqlite3.connect(args.rcn_db)
     try:
         for o in sorted(chosen, key=lambda x: (x["id"] not in new_ids, x.get("cena_m2") or 0)):
-            print("%s%s | %s | %s m² | %s zł | %s zł/m² | %s | %s | %s" % (
-                "[NOWA] " if o["id"] in new_ids else "", o.get("tytul"), o.get("dzielnica") or "dzielnica nieznana",
-                ("%g" % o["powierzchnia_m2"]).replace(".", ",") if o.get("powierzchnia_m2") else "?",
-                _zl(o.get("cena")), _zl(o.get("cena_m2")),
-                {"wtorny": "wtórny", "pierwotny": "pierwotny"}.get(o.get("rynek") or "", "rynek ?"),
-                _comparison(o, rcn, args.promien, args.miesiace, today), o.get("url")))
+            print(format_offer_line(o, o["id"] in new_ids, _comparison(o, rcn, args.promien, args.miesiace, today)))
     finally:
         rcn.close()
     print("Ceny ofertowe z OLX porównane z cenami transakcyjnymi RCN (promień %g m, ostatnie %d mies., podobny metraż)."
