@@ -147,3 +147,17 @@ node --version && (defuddle --version || sudo npm install -g defuddle)
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && for f in ref/oferty/*.html; do echo "== $f"; defuddle parse "$f" --md | sed -E 's/(\+?48[ -]?)?[0-9]{3}[ -]?[0-9]{3}[ -]?[0-9]{3}/[telefon]/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/[email]/g' | head -60; done
 ```
+
+### Wynik rozpoznania i karta mieszkania (2026-10-28)
+
+Obie strony odpowiedziały HTTP 200. Nieruchomosci-online.pl ma pełne dane w JSON-LD (blok z ogłoszeniem, nie pierwszy blok, który jest adresem portalu w Olsztynie) i oznacza lokalizację jako przybliżoną. Gratka trzyma dane w `__NUXT_DATA__` w formacie devalue (liczby to odnośniki do innych pozycji tablicy). Na stronie Gratki jest też polecane drugie ogłoszenie, więc główne to pierwszy obiekt z metrażem, ceną i liczbą pokoi. Oba linki to to samo mieszkanie: 65,08 m², 4 pokoje, 839 000 zł, rok 2020, balkon około 7 m².
+
+Karta mieszkania z zapisanych stron (bez ponownego pobierania):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://gratka.pl/nieruchomosci/mieszkanie-katowice-ligota-biskupa-tadeusza-szurmana/ob/48453361" --file ref/oferty/gratka_pl_48453361.html
+```
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://katowice.nieruchomosci-online.pl/mieszkanie,z-aneksem-kuchennym/26868680.html" --file ref/oferty/katowice_nieruchomosci-online_pl_26868680_html.html
+```

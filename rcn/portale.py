@@ -1,0 +1,296 @@
+"""Turn a saved listing page into one normalised offer (price, area, rooms, address, coordinates).
+
+Supported: Gratka (Nuxt `__NUXT_DATA__` devalue payload) and Nieruchomosci-online.pl
+(JSON-LD). Other portals fall back to generic JSON-LD. Free text is only scanned for
+mentions (garden, terrace, balcony, parking, build year); it is never stored, so contact
+data in descriptions does not leak. Standard library only.
+"""
+import json
+import math
+import re
+import urllib.parse
+from html.parser import HTMLParser
+from typing import Any, Dict, Iterable, List, Optional, Set
+
+from rcn.oferta import _PageParser
+
+REQUIRED = ("cena", "powierzchnia_m2", "wspolrzedne")
+_SPECIAL_SKIP = {"Reactive", "ShallowReactive", "Ref", "ShallowRef"}
+_SPECIAL_EMPTY = {"EmptyRef", "EmptyShallowRef", "undefined"}
+
+
+def devalue_hydrate(arr: List[Any], start: int = 0) -> Any:
+    """Rebuild the value at `start` from a devalue-flattened array (as used by Nuxt 3)."""
+    memo: Dict[int, Any] = {}
+
+    def ref(i):
+        if not isinstance(i, int) or isinstance(i, bool):
+            return i
+        if i < 0:
+            return None                 # undefined, hole, NaN, infinities
+        if i in memo:
+            return memo[i]
+        v = arr[i]
+        if isinstance(v, dict):
+            out: Dict[str, Any] = {}
+            memo[i] = out
+            for key, child in v.items():
+                out[key] = ref(child)
+            return out
+        if isinstance(v, list):
+            if v and isinstance(v[0], str):
+                tag = v[0]
+                if tag in _SPECIAL_SKIP:
+                    memo[i] = ref(v[1])
+                elif tag in _SPECIAL_EMPTY:
+                    memo[i] = None
+                elif tag == "Date":
+                    memo[i] = v[1]
+                elif tag in ("Set", "BigInt"):
+                    memo[i] = [ref(x) for x in v[1:]] if tag == "Set" else int(v[1])
+                elif tag in ("Map", "null"):
+                    memo[i] = {str(ref(v[k])): ref(v[k + 1]) for k in range(1, len(v) - 1, 2)}
+                else:
+                    memo[i] = None
+                return memo[i]
+            out_list: List[Any] = []
+            memo[i] = out_list
+            out_list.extend(ref(x) for x in v)
+            return out_list
+        memo[i] = v
+        return v
+
+    return ref(start)
+
+
+def devalue_find_first(arr: List[Any], keys: Set[str]) -> Optional[dict]:
+    """Hydrate the first object (lowest index) that has all `keys`: the page's main record."""
+    for i, v in enumerate(arr):
+        if isinstance(v, dict) and keys <= set(v):
+            return devalue_hydrate(arr, i)
+    return None
+
+
+def to_number(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, dict):
+        for key in ("amount", "value", "price"):
+            if key in value:
+                return to_number(value[key])
+        return None
+    text = re.sub(r"\s+", "", str(value)).replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    return float(match.group()) if match else None
+
+
+def _to_int(value: Any) -> Optional[int]:
+    if isinstance(value, str) and value.strip().lower() in ("parter", "ground floor"):
+        return 0
+    number = to_number(value)
+    return int(number) if number is not None else None
+
+
+def _find_key(data: Any, pattern: str) -> Any:
+    """First value whose key matches `pattern` (case-insensitive), depth-first."""
+    rx = re.compile(pattern, re.I)
+    stack = [data]
+    while stack:
+        item = stack.pop(0)
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if rx.fullmatch(key) and child not in (None, "", [], {}):
+                    return child
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return None
+
+
+class _TextParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts, self._skip = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript"):
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript") and self._skip:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if not self._skip and data.strip():
+            self.parts.append(data.strip())
+
+
+def html_to_text(html: str) -> str:
+    parser = _TextParser()
+    parser.feed(html)
+    return " ".join(parser.parts)
+
+
+_AREA = r"[^.\d]{0,40}?(\d+(?:[.,]\d+)?)\s*(?:m²|m2|mkw|m\b)"
+_MENTIONS = (("ogrod", r"ogr[oó]d(?!z)"), ("taras", r"taras"), ("balkon", r"balkon"), ("loggia", r"loggi"))
+_PARKING = r"(miejsc\w*\s+postojow|gara[żz]|hal\w*\s+gara)"
+_YEAR = r"(?:rok\s+budowy|wybudowan\w*|oddan\w*\s+do\s+u[żz]ytku|budynek\s+z)\D{0,40}?((?:19|20)\d{2})"
+
+
+def features_from_text(text: str) -> Dict[str, Any]:
+    """Mentions found in free text; an area in m² when the text gives one, else True."""
+    found: Dict[str, Any] = {}
+    for key, word in _MENTIONS:
+        match = re.search(word + r"\w*" + _AREA, text, re.I)
+        if match:
+            found[key] = float(match.group(1).replace(",", "."))
+        elif re.search(word, text, re.I):
+            found[key] = True
+    if re.search(_PARKING, text, re.I):
+        found["miejsce_postojowe"] = True
+    year = re.search(_YEAR, text, re.I)
+    if year:
+        found["rok"] = int(year.group(1))
+    return found
+
+
+def _market(value: Any) -> Optional[str]:
+    text = str(value or "").lower()
+    if "wtórn" in text or "wtorn" in text or "secondary" in text:
+        return "wtorny"
+    if "pierwotn" in text or "primary" in text or "developer" in text:
+        return "pierwotny"
+    return None
+
+
+def _portal_and_id(url: str):
+    parts = urllib.parse.urlsplit(url)
+    host = parts.netloc.lower()
+    host = host[4:] if host.startswith("www.") else host
+    if host.endswith("nieruchomosci-online.pl"):
+        portal = "nieruchomosci-online"
+    elif host.endswith("gratka.pl"):
+        portal = "gratka"
+    else:
+        portal = host
+    numbers = re.findall(r"\d{5,}", parts.path)
+    return portal, (numbers[-1] if numbers else None)
+
+
+def _empty_offer(url: str) -> Dict[str, Any]:
+    portal, oid = _portal_and_id(url)
+    return {"portal": portal, "id": oid, "url": url, "tytul": None, "cena": None, "powierzchnia_m2": None,
+            "cena_m2": None, "pokoje": None, "pietro": None, "rok_budowy": None, "rynek": None, "ulica": None,
+            "miejscowosc": None, "lat": None, "lon": None, "lokalizacja_przyblizona": False, "wzmianki": {},
+            "brakuje": []}
+
+
+def _from_json_ld(offer: Dict[str, Any], blocks: Iterable[Any]) -> None:
+    candidates = [b for b in blocks if isinstance(b, dict) and ("floorSize" in b or "geo" in b or "offers" in b)]
+    if not candidates:
+        candidates = [b for b in blocks if isinstance(b, dict) and "price" in b]
+    if not candidates:
+        return
+    block = candidates[0]
+    offers = block.get("offers")
+    first = offers[0] if isinstance(offers, list) and offers else (offers if isinstance(offers, dict) else block)
+    offer["cena"] = to_number(first.get("price"))
+    spec = first.get("priceSpecification") if isinstance(first, dict) else None
+    if isinstance(spec, dict) and spec.get("unitCode") in ("MTK", "M2", "m2"):
+        offer["cena_m2"] = to_number(spec.get("price"))
+    offer["powierzchnia_m2"] = to_number(block.get("floorSize"))
+    offer["pokoje"] = _to_int(block.get("numberOfRooms"))
+    offer["pietro"] = _to_int(block.get("floorLevel"))
+    offer["rok_budowy"] = _to_int(block.get("yearBuilt"))
+    address = block.get("address") if isinstance(block.get("address"), dict) else {}
+    offer["ulica"] = address.get("streetAddress")
+    offer["miejscowosc"] = address.get("addressLocality")
+    geo = block.get("geo") if isinstance(block.get("geo"), dict) else {}
+    offer["lat"], offer["lon"] = to_number(geo.get("latitude")), to_number(geo.get("longitude"))
+
+
+def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]:
+    arr = blocks.get("json___NUXT_DATA__")
+    if not isinstance(arr, list):
+        return None
+    listing = devalue_find_first(arr, {"area", "price", "numberOfRooms"})
+    if not listing:
+        return None
+    offer["cena"] = to_number(listing.get("price"))
+    offer["powierzchnia_m2"] = to_number(listing.get("area"))
+    offer["cena_m2"] = to_number(listing.get("priceM2"))
+    offer["pokoje"] = _to_int(listing.get("numberOfRooms"))
+    offer["pietro"] = _to_int(listing.get("floor"))
+    offer["rynek"] = _market(listing.get("marketType"))
+    offer["tytul"] = listing.get("title") if isinstance(listing.get("title"), str) else None
+    location = listing.get("location")
+    offer["ulica"] = _find_key(location, r"street")
+    place = _find_key(location, r"location|city|locality")
+    if isinstance(place, str):
+        offer["miejscowosc"] = place.split(",")[0].strip()
+    offer["lat"] = to_number(_find_key(listing, r"lat(itude)?"))
+    offer["lon"] = to_number(_find_key(listing, r"lon(gitude)?|lng"))
+    details = listing.get("buildingDetailedInformation")
+    for item in details if isinstance(details, list) else []:
+        if isinstance(item, dict) and "rok budowy" in str(item.get("label", "")).lower():
+            offer["rok_budowy"] = _to_int(item.get("value"))
+    if offer["rok_budowy"] is None:
+        offer["rok_budowy"] = _to_int(_find_key(listing, r"(build|construction)(ing)?Year|yearBuilt"))
+    description = listing.get("description")
+    return description if isinstance(description, str) else None
+
+
+def parse_listing(html: str, url: str) -> Dict[str, Any]:
+    """One normalised offer from a saved listing page; `brakuje` lists what could not be read."""
+    offer = _empty_offer(url)
+    parser = _PageParser()
+    parser.feed(html)
+    ld_blocks, other = [], {}
+    for kind, text in parser.blocks:
+        try:
+            data = json.loads(text)
+        except ValueError:
+            continue
+        if kind == "ld_json":
+            ld_blocks.extend(data if isinstance(data, list) else [data])
+        else:
+            other[kind] = data
+    meta = dict(parser.meta)
+    description = None
+    if offer["portal"] == "gratka":
+        description = _from_gratka(offer, other)
+    if offer["cena"] is None and offer["powierzchnia_m2"] is None:
+        _from_json_ld(offer, ld_blocks)
+    offer["tytul"] = offer["tytul"] or meta.get("og:title") or " ".join(parser.title.split()) or None
+    if offer["cena_m2"] is None and offer["cena"] and offer["powierzchnia_m2"]:
+        offer["cena_m2"] = round(offer["cena"] / offer["powierzchnia_m2"], 2)
+    text = html_to_text(html)
+    offer["lokalizacja_przyblizona"] = "lokalizacja przybliżona" in text.lower()
+    offer["wzmianki"] = features_from_text(" ".join(t for t in (description, text) if t))
+    if offer["rok_budowy"] is None and "rok" in offer["wzmianki"]:
+        offer["rok_budowy"] = offer["wzmianki"]["rok"]
+    offer["brakuje"] = [f for f in REQUIRED if (f == "wspolrzedne" and (offer["lat"] is None or offer["lon"] is None))
+                        or (f != "wspolrzedne" and offer.get(f) is None)]
+    return offer
+
+
+def _distance_m(a: Dict[str, Any], b: Dict[str, Any]) -> Optional[float]:
+    if None in (a.get("lat"), a.get("lon"), b.get("lat"), b.get("lon")):
+        return None
+    dy = (a["lat"] - b["lat"]) * 111_320.0
+    dx = (a["lon"] - b["lon"]) * 111_320.0 * math.cos(math.radians(a["lat"]))
+    return math.hypot(dy, dx)
+
+
+def same_offer(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    """The same flat listed twice: area within 0.5 m², price within 1%, and close if both have coordinates."""
+    if None in (a.get("powierzchnia_m2"), b.get("powierzchnia_m2"), a.get("cena"), b.get("cena")):
+        return False
+    if abs(a["powierzchnia_m2"] - b["powierzchnia_m2"]) > 0.5:
+        return False
+    if abs(a["cena"] - b["cena"]) > 0.01 * max(a["cena"], b["cena"]):
+        return False
+    distance = _distance_m(a, b)
+    return distance is None or distance < 500
