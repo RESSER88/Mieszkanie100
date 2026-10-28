@@ -22,7 +22,7 @@ Narzędzie na Raspberry Pi, które pomaga rodzinie (2 dorosłych, 2 dzieci) wybr
 | 2. Okolica: ceny w promieniu | Zapytanie: transakcje w promieniu X metrów od ulicy, z ostatnich N miesięcy, mediana zł/m² z próbką i okresem. Plan: `docs/superpowers/plans/2026-10-28-okolica-query.md`. | Zaimplementowany (`rcn/okolica.py`, 22 testy na danych sztucznych). Czeka na test na prawdziwej bazie na Raspberry Pi, w tym sprawdzenie wartości `rodzaj_rynku`. |
 | 3. Ceny ofertowe nowych mieszkań | Klient mScanner (`mode=asking`), sprawdzenie pokrycia Katowic, cytowanie źródła. | Do zrobienia. Pokrycie niesprawdzone. |
 | 4. Monitor ofert zakupu | Pobieranie ofert kupna z portali: Otodom, Gratka, OLX Nieruchomości, Morizon, Nieruchomosci-online.pl, Domiporta, Adresowo, RynekPierwotny. Szczegóły w sekcji „Etap 4" poniżej. | Zażądany przez użytkownika 2026-10-28. Wymaga rozpoznania każdego portalu (regulamin, dostęp techniczny) przed budową. Nie zaczęty. |
-| 5. Otoczenie | Przedszkola, szkoły, komunikacja, planowane inwestycje (plan miejscowy, pozwolenia na budowę). | Kandydat na źródło: OpenStreetMap (przedszkola, szkoły, przystanki). Niesprawdzony, szczegóły w sekcji „Mapy i dane przestrzenne". Darmowe API mScanner tego nie zawiera. Planowane inwestycje nadal bez źródła. |
+| 5. Otoczenie | Przedszkola, szkoły, komunikacja, planowane inwestycje (plan miejscowy, pozwolenia na budowę). | Kandydat na źródło: OpenStreetMap (przedszkola, szkoły, przystanki, linie energetyczne), szczegóły w sekcji „Infrastruktura z OpenStreetMap". Niesprawdzony, szczegóły w sekcji „Mapy i dane przestrzenne". Darmowe API mScanner tego nie zawiera. Planowane inwestycje nadal bez źródła. |
 | 6. Uruchomienie | Docker, uruchamianie cykliczne, powiadomienia, odświeżanie danych (WFS od ostatniej daty). | Po etapach 2–3. |
 
 ## Etap 4: monitor ofert zakupu (szczegóły)
@@ -60,6 +60,34 @@ Cel: oferty kupna z ośmiu portali (Otodom, Gratka, OLX Nieruchomości, Morizon,
 3. Adapter pierwszego portalu na zapisanych stronach.
 4. Połączenie z kartą z etapu 2.
 5. Kolejne portale, po jednym.
+
+## Zasięg: województwo śląskie na start (decyzja użytkownika, 2026-10-28)
+
+Na dziś pracujemy tylko na województwie śląskim, ale konstrukcja ma pozwalać na dodanie kolejnych regionów bez przepisywania kodu.
+
+- **Jednostka rozszerzenia to powiat (kod TERYT, 4 cyfry).** Importer (`rcn/rcn_import.py --teryt ...`) i zapytanie okolicy (`rcn/okolica.py --city ...`) już przyjmują powiat jako parametr, a checkpoint jest zapisywany osobno dla każdej pary warstwa i powiat. Dodanie regionu to uruchomienie importu dla jego powiatów.
+- **Województwo śląskie to 36 powiatów** (kody 2401–2417 powiaty ziemskie i 2461–2479 miasta na prawach powiatu). Lista z oficjalnej wtyczki GUGiK: 2401 będziński, 2402 bielski, 2403 cieszyński, 2404 częstochowski, 2405 gliwicki, 2406 kłobucki, 2407 lubliniecki, 2408 mikołowski, 2409 myszkowski, 2410 pszczyński, 2411 raciborski, 2412 rybnicki, 2413 tarnogórski, 2414 bieruńsko-lędziński, 2415 wodzisławski, 2416 zawierciański, 2417 żywiecki, 2461 Bielsko-Biała, 2462 Bytom, 2463 Chorzów, 2464 Częstochowa, 2465 Dąbrowa Górnicza, 2466 Gliwice, 2467 Jastrzębie-Zdrój, 2468 Jaworzno, 2469 Katowice, 2470 Mysłowice, 2471 Piekary Śląskie, 2472 Ruda Śląska, 2473 Rybnik, 2474 Siemianowice Śląskie, 2475 Sosnowiec, 2476 Świętochłowice, 2477 Tychy, 2478 Zabrze, 2479 Żory.
+- **Priorytet powiatów:** najpierw Katowice (2469, gotowe), potem sąsiednie miasta (Mysłowice 2470, Siemianowice Śląskie 2474, Chorzów 2463, Tychy 2477, Sosnowiec 2475, Ruda Śląska 2472) i powiat mikołowski (2408), bo mieszkania w pobliżu Katowic bywają porównywalną alternatywą. Dalsze powiaty na życzenie.
+- **Skala (szacunek, niesprawdzony):** Katowice to 41 845 lokali i około 210 stron po 200 rekordów. Całe śląskie to prawdopodobnie kilka do kilkunastu razy więcej. SQLite wystarcza, import ma trwać godziny, a nie dni. Trzeba zmierzyć przy drugim powiecie.
+- **Do sprawdzenia przy pierwszym dodatkowym powiecie:** czy filtr WFS po `TERYT` działa tak samo dla powiatów ziemskich (nazwy w adresach, gminy), oraz czy zapytanie okolicy nie miesza miejscowości o tej samej nazwie ulicy (parametr `--city` już rozdziela).
+
+## Infrastruktura z OpenStreetMap: linie energetyczne, stacje, szkoły, przystanki (propozycja)
+
+Źródło: wycinek województwa śląskiego z Geofabrik w formacie PBF (według znalezionego opisu około 177 MB, rozmiar i adres `https://download.geofabrik.de/europe/poland/slaskie.html` niezweryfikowane). Pełna Polska to osobny, znacznie większy plik, dla przyszłego rozszerzenia.
+
+- **Obiekty:** linie wysokiego napięcia (`power=line`, tag `voltage` w woltach, np. 110000, 220000, 400000), stacje i transformatory, przedszkola (`amenity=kindergarten`), szkoły (`amenity=school`), przystanki autobusowe i tramwajowe.
+- **Wskaźniki dla oferty lub transakcji:** odległość w linii prostej do najbliższej linii energetycznej (z napięciem, jeśli jest w danych), do szkoły, przedszkola i przystanku. To dodatkowe informacje do analizy, a nie ocena atrakcyjności. Odległość od linii nie przesądza o wpływie na wartość mieszkania.
+- **Zastrzeżenie o danych:** OSM nie jest kompletnym rejestrem. Brak linii na mapie nie oznacza jej braku w terenie, a tag napięcia bywa niepełny, wielokrotny (np. `110000;220000`) lub nieaktualny. Raport zawsze mówi „brak w danych OSM", nigdy „nie ma".
+- **Jak przetwarzać (propozycja):** na Raspberry Pi użyć narzędzia `osmium` (pakiet systemowy `osmium-tool`) do wyfiltrowania tych obiektów z pliku PBF i zapisu do GeoJSON. Nasz kod w Pythonie czyta potem tylko GeoJSON, więc nie dochodzi zewnętrzny pakiet Pythona. Plik PBF odświeżany rzadko (np. raz w miesiącu), bez odpytywania publicznych serwerów dla każdej nieruchomości.
+- **Szybki test przed budową:** Overpass Turbo dla jednego obszaru pozwala obejrzeć, czy dane o liniach i szkołach w Katowicach są sensowne. Publiczny Overpass ma limity, więc tylko do oglądania.
+- **Mapa:** MapLibre GL JS lub Mapbox GL JS. Przy wyświetlaniu obowiązuje podanie źródła „© autorzy OpenStreetMap" i licencja ODbL. Publiczne kafelki OSM nie służą do masowego pobierania na zapas.
+
+### Zadania
+
+1. Na Raspberry Pi pobrać plik PBF śląskiego, sprawdzić rozmiar i zainstalować `osmium-tool`. Wynik zapisać w `docs/`.
+2. Wyfiltrować linie energetyczne, stacje, szkoły, przedszkola i przystanki do GeoJSON, policzyć obiekty w Katowicach.
+3. Moduł `rcn/otoczenie.py`: najbliższy obiekt danego rodzaju od punktu (odległość w EPSG:2180 po przeliczeniu z WGS84) z testami na małym zestawie GeoJSON.
+4. Dodać wskaźniki do karty okolicy.
 
 ## Mapy i dane przestrzenne: Mapbox i OpenStreetMap (propozycja, 2026-10-28)
 

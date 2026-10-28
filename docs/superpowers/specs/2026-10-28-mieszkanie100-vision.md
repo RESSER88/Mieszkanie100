@@ -24,6 +24,10 @@ Narzędzie działa na Raspberry Pi. Wynik wygląda tak:
 
 Forma (propozycja): na początku polecenie w terminalu (`rcn/okolica.py`), potem prosta strona dostępna z telefonu w sieci domowej, serwowana z Raspberry Pi. Powiadomienia dopiero na końcu. Uzasadnienie: polecenie można sprawdzić od razu na danych, strona dodaje wygodę, ale nie zmienia liczb.
 
+## Zasięg
+
+Na start województwo śląskie (36 powiatów, w tym Katowice jako pierwszy gotowy). Rozszerzenie na inne regiony ma być dodaniem kolejnych powiatów, bez przepisywania kodu. Szczegóły w roadmapie, sekcja „Zasięg".
+
 ## Co oznacza sukces
 
 - Karta mieszkania dla znanej ulicy powstaje w kilka sekund z lokalnej bazy, bez internetu.
