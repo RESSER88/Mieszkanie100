@@ -223,3 +223,9 @@ Jedno zapytanie testowe (strona wyników dla Katowic):
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && python3 rcn/oferta.py probe "https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/katowice/katowice/katowice" | head -15
 ```
+
+### Pierwsze uruchomienia na prawdziwych danych (Raspberry Pi, 2026-10-28)
+
+- `rcn/olx.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100` (kod `bb567e9`): pobrano 986 z 986 ofert (wszystkie strony bez odmowy), pasuje 1: „Ville Garden | mieszkanie 4-pok. | A.33", 110,72 m², 1 815 808 zł, 16 400 zł/m², rynek pierwotny, powyżej typowego zakresu, ale porównanie z rynkiem pierwotnym ma tylko 3 sprzedaże w promieniu 500 m (za mała próba). Drugie uruchomienie: nowych 0, więc zapamiętywanie działa.
+- Wniosek: mieszkań od 100 m² w samej dzielnicy Ligota-Panewniki jest na OLX bardzo mało, a granice dzielnic OLX są umowne. Propozycja: filtr „w promieniu X km od ulicy" liczony ze współrzędnych ofert.
+- `rcn/oferta.py probe` dla strony wyników Otodom dla Katowic (kod `fcb3a3d`): HTTP 200 z uczciwym identyfikatorem, `next_data=1`, `ld_json=2`, 3172 pola kandydujące. Otodom nie blokuje naszego narzędzia.
