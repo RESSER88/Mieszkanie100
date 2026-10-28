@@ -119,3 +119,13 @@ Znalezione problemy i poprawki (kod po `0b0182d`):
 - Ponowny import czyści tabelę, żeby obiekty, które po zmianie reguł przestały się kwalifikować, nie zostały w bazie.
 
 Do ponownego sprawdzenia przez użytkownika: czy najbliższe obiekty zgadzają się z tym, co zna z okolicy.
+
+### Wynik po poprawkach (Raspberry Pi, 2026-10-28, kod `cfc4c43`)
+
+- Import: 73 529 zapisanych (wcześniej 82 798), 63 855 pominiętych, 0 błędnych.
+- Stacje energetyczne WN: najbliższa 1233 m („GPZ Ligota", 110/20 kV), 10 w promieniu 3 km (wcześniej 94 z kioskami transformatorowymi).
+- Drogi w budowie: najbliższa 993 m (Kłodnicka, klasa `tertiary`), 3 odcinki. Planowane: 671 m, klasa `tertiary`, 15 odcinków. Chodniki zniknęły.
+- Przystanki: 75 różnych nazw w promieniu 3 km.
+- Bez zmian: linia 110 kV 1139 m, kolej 633 m, teren przemysłowy 226 m, maszt 198 m, przedszkole 135 m, szkoła 83 m.
+
+Weryfikacja z wiedzą użytkownika o okolicy: jeszcze nie.
