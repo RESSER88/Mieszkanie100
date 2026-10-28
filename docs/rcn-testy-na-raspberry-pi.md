@@ -135,3 +135,15 @@ Weryfikacja z wiedzą użytkownika o okolicy: jeszcze nie.
 `rcn/oferta.py probe URL` pobiera jedną stronę ogłoszenia na żądanie użytkownika (bez przeszukiwania portalu), usuwa z adresu parametry reklamowe (`utm_*`, `gclid`, `gad_*`), zapisuje HTML w `ref/oferty/` (poza repozytorium) i wypisuje pola z danych strukturalnych: JSON-LD, `__NEXT_DATA__`, znaczniki `og:`. Nie wypisuje telefonów, e-maili, nazwisk ani adresów biur pośredników. Przy odmowie portalu (np. HTTP 403) kończy się bez ponawiania.
 
 Pierwsze przypadki: ogłoszenie z Gratki przy ul. bp. Szurmana oraz ogłoszenie z Nieruchomosci-online.pl.
+
+### Opis ogłoszenia przez defuddle (opcjonalnie)
+
+defuddle czyta zapisany plik HTML (sprawdzone na wersji 0.19.6: usuwa menu i stopkę, zostawia treść ogłoszenia). Opis często zawiera telefon pośrednika, dlatego polecenie poniżej zastępuje numery telefonów i adresy e-mail znacznikami przed wyświetleniem.
+
+```bash
+node --version && (defuddle --version || sudo npm install -g defuddle)
+```
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && for f in ref/oferty/*.html; do echo "== $f"; defuddle parse "$f" --md | sed -E 's/(\+?48[ -]?)?[0-9]{3}[ -]?[0-9]{3}[ -]?[0-9]{3}/[telefon]/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/[email]/g' | head -60; done
+```
