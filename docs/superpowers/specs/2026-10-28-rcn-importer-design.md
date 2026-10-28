@@ -116,3 +116,16 @@ Na Raspberry Pi: `python3 rcn/rcn_import.py --teryt 2469 --layer lokale --db rcn
 
 - Serwer może nie obsługiwać `And` z `PropertyIsGreaterThan` na `gid`. Importer rozpoznaje to przy pierwszym zapytaniu (błąd lub niemonotoniczne `gid`) i kończy z jasnym komunikatem.
 - Limity i warunki użytkowania usługi są nieznane. Domyślnie 1 zapytanie naraz i krótka przerwa między stronami.
+
+## Pierwszy raport okolicy na prawdziwej bazie (Raspberry Pi, 2026-10-28, kod `fba9de7`)
+
+`scripts/pi_check.sh` na Raspberry Pi: 37 testów przeszło. `rodzaj_rynku`: `rynekWtorny` 26 236, `rynekPierwotny` 15 596, brak 13 (nazwa `rynekPierwotny` potwierdzona).
+
+Okolica ul. Braci Mniejszych, 500 m, 24 miesiące (środek z 129 rekordów):
+
+- Rynek wtórny: próbka 93, mediana 10 919 zł/m², zakres 25.–75. percentyl 9 269 .. 12 038, ale **minimum 71 zł/m²**.
+- Rynek pierwotny: próbka 40, **mediana 331 zł/m²** i mediana ceny 18 039 zł. To nie są ceny mieszkań.
+
+Przyczyna (sprawdzona na migawce deweloperuch dla Katowic): warstwa `ms:lokale` obejmuje nie tylko mieszkania. Lokale o funkcji mieszkalnej mają tam medianę 11 174 zł/m², a lokale o innych funkcjach (kody 5 i 6, garaże i podobne) 416 i 839 zł/m². Deweloperzy sprzedają osobno miejsca postojowe i komórki, więc na rynku pierwotnym przeważają. Nawet wśród mieszkań minimum to 1 zł/m², co wskazuje na sprzedaże udziałów lub transakcje poza wolnym rynkiem.
+
+Poprawka w `rcn/okolica.py` (decyzja autora, do akceptacji użytkownika): do porównania trafia tylko sprzedaż całego lokalu (`NIER_UDZIAL` równy jedności, np. `1/1` lub `100/100`) o funkcji `mieszkalna` na wolnym rynku (`TRAN_RODZAJ_TRANS = wolnyRynek`). Brakujący udział lub rodzaj transakcji nie wyklucza rekordu. Raport podaje liczby odrzuconych rekordów wg powodu, żeby nic nie ginęło po cichu. `scripts/pi_check.sh` pokazuje rozkład funkcji lokalu, udziałów i rodzajów transakcji, żeby sprawdzić te założenia na prawdziwych danych.

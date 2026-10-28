@@ -25,6 +25,19 @@ con = sqlite3.connect(sys.argv[1])
 for value, n in con.execute("SELECT rodzaj_rynku, COUNT(*) FROM lokale GROUP BY 1 ORDER BY 2 DESC"):
     print("%-20s %d" % (value, n))
 PY
+echo "== Funkcja lokalu, udział, rodzaj transakcji (najczęstsze wartości)"
+python3 - "$DB" <<'PY'
+import collections, json, sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+kinds, shares, trans = collections.Counter(), collections.Counter(), collections.Counter()
+for kind, raw in con.execute("SELECT rodzaj_obiektu, raw_json FROM lokale"):
+    data = json.loads(raw or "{}")
+    kinds[kind] += 1
+    shares[data.get("NIER_UDZIAL")] += 1
+    trans[data.get("TRAN_RODZAJ_TRANS")] += 1
+for name, counter in (("funkcja", kinds), ("udzial", shares), ("rodzaj_trans", trans)):
+    print(name + ": " + ", ".join("%s=%d" % (k, n) for k, n in counter.most_common(8)))
+PY
 echo "== Okolica: ul. Braci Mniejszych, 500 m, 24 miesiące"
 python3 rcn/okolica.py --db "$DB" --street "Braci Mniejszych" --radius 500 --months 24
 echo "== Gotowe"

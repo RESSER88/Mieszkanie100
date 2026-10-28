@@ -8,6 +8,7 @@ Standard library only (Python 3.8+).
 """
 import argparse
 import calendar
+import json
 import math
 import sqlite3
 import statistics
@@ -45,42 +46,74 @@ def find_center(con: sqlite3.Connection, street: str,
     return sum(ys) / len(ys), sum(xs) / len(xs), len(ys)
 
 
+def _is_whole_share(text: Optional[str]) -> bool:
+    """True for a whole unit ("1/1", "100/100") or when the share is missing or unreadable."""
+    if not text:
+        return True
+    try:
+        num, den = (float(part) for part in text.split("/"))
+    except ValueError:
+        return True
+    return den > 0 and abs(num / den - 1.0) < 1e-9
+
+
+EXCLUSIONS = (
+    ("bez_wspolrzednych", "bez współrzędnych"),
+    ("niemieszkalne", "lokale niemieszkalne"),
+    ("udzialy", "udziały w nieruchomości"),
+    ("nie_wolny_rynek", "poza wolnym rynkiem"),
+)
+
+
 def transactions_in_radius(con: sqlite3.Connection, center: Tuple[float, float], radius_m: float,
                            date_from: str, date_to: str, area_min: Optional[float] = None,
-                           area_max: Optional[float] = None) -> Tuple[List[dict], int]:
-    """Records with a price per m2 inside the radius and date window, each transaction once.
+                           area_max: Optional[float] = None,
+                           funkcja: Optional[str] = "mieszkalna") -> Tuple[List[dict], Dict[str, int]]:
+    """Comparable sales inside the radius and date window, each transaction once.
 
-    Returns (rows, skipped) where skipped counts priced rows in the window that have
-    no coordinates and so could not be placed.
+    Only free-market sales of a whole unit (share 1/1) with the given unit function are
+    kept, because garages, parking spaces and share sales have prices far from flats.
+    A missing share or transaction type is kept. Returns (rows, excluded counts by reason).
     """
     cy, cx = center
-    sql = ("SELECT gid, tran_id, obj_id, dok_data, rodzaj_rynku, liczba_izb, pow_m2, cena_m2, obj_cena,"
-           " ulica, nr, y_pl1992, x_pl1992 FROM lokale WHERE dok_data BETWEEN ? AND ?"
-           " AND cena_m2 IS NOT NULL")
-    params: list = [date_from, date_to]
+    sql = ("SELECT gid, tran_id, obj_id, dok_data, rodzaj_rynku, rodzaj_obiektu, liczba_izb, pow_m2,"
+           " cena_m2, obj_cena, ulica, nr, y_pl1992, x_pl1992, raw_json FROM lokale"
+           " WHERE dok_data BETWEEN ? AND ? AND cena_m2 IS NOT NULL"
+           " AND (y_pl1992 IS NULL OR (y_pl1992 BETWEEN ? AND ? AND x_pl1992 BETWEEN ? AND ?))")
+    params: list = [date_from, date_to, cy - radius_m, cy + radius_m, cx - radius_m, cx + radius_m]
     if area_min is not None:
         sql += " AND pow_m2 >= ?"
         params.append(area_min)
     if area_max is not None:
         sql += " AND pow_m2 <= ?"
         params.append(area_max)
-    cols = ("gid", "tran_id", "obj_id", "dok_data", "rodzaj_rynku", "liczba_izb", "pow_m2", "cena_m2",
-            "obj_cena", "ulica", "nr", "y_pl1992", "x_pl1992")
+    cols = ("gid", "tran_id", "obj_id", "dok_data", "rodzaj_rynku", "rodzaj_obiektu", "liczba_izb",
+            "pow_m2", "cena_m2", "obj_cena", "ulica", "nr", "y_pl1992", "x_pl1992", "raw_json")
+    excluded = {key: 0 for key, _ in EXCLUSIONS}
     latest: Dict[object, dict] = {}
-    skipped = 0
     for values in con.execute(sql, params):
         row = dict(zip(cols, values))
         if row["y_pl1992"] is None or row["x_pl1992"] is None:
-            skipped += 1
+            excluded["bez_wspolrzednych"] += 1
             continue
         distance = math.hypot(row["y_pl1992"] - cy, row["x_pl1992"] - cx)
         if distance > radius_m:
+            continue
+        raw = json.loads(row.pop("raw_json") or "{}")
+        if funkcja is not None and row["rodzaj_obiektu"] != funkcja:
+            excluded["niemieszkalne"] += 1
+            continue
+        if not _is_whole_share(raw.get("NIER_UDZIAL")):
+            excluded["udzialy"] += 1
+            continue
+        if raw.get("TRAN_RODZAJ_TRANS") not in (None, "wolnyRynek"):
+            excluded["nie_wolny_rynek"] += 1
             continue
         row["odleglosc_m"] = distance
         key = (row["tran_id"], row["obj_id"]) if row["tran_id"] is not None else row["gid"]
         if key not in latest or row["gid"] > latest[key]["gid"]:
             latest[key] = row
-    return sorted(latest.values(), key=lambda r: r["odleglosc_m"]), skipped
+    return sorted(latest.values(), key=lambda r: r["odleglosc_m"]), excluded
 
 
 @dataclass
@@ -130,7 +163,7 @@ def _zl(value: Optional[float]) -> str:
 
 def format_report(street: str, center_n: int, radius_m: float, date_from: str, date_to: str,
                   area_min: Optional[float], area_max: Optional[float],
-                  summaries: List[Tuple[str, Summary]], skipped: int) -> str:
+                  summaries: List[Tuple[str, Summary]], excluded: Dict[str, int]) -> str:
     area = "dowolna" if area_min is None and area_max is None else "%s..%s m2" % (
         "?" if area_min is None else "%g" % area_min, "?" if area_max is None else "%g" % area_max)
     lines = [
@@ -150,8 +183,10 @@ def format_report(street: str, center_n: int, radius_m: float, date_from: str, d
             if s.status == "za_mala_proba":
                 lines.append("  UWAGA: próbka poniżej %d transakcji, mediana może wprowadzać w błąd." % MIN_SAMPLE)
         lines.append("")
-    if skipped:
-        lines.append("Pominięto %d rekordów bez współrzędnych (nie da się ich przypisać do okolicy)." % skipped)
+    dropped = ["%s: %d" % (label, excluded.get(key, 0)) for key, label in EXCLUSIONS if excluded.get(key)]
+    lines.append("Do porównania tylko sprzedaż całych lokali mieszkalnych na wolnym rynku.")
+    if dropped:
+        lines.append("Odrzucono: " + ", ".join(dropped) + ".")
     lines.append("Źródło: Rejestr Cen Nieruchomości (RCN). Ceny z aktów notarialnych, nie ceny ofertowe.")
     return "\n".join(lines)
 
@@ -185,13 +220,13 @@ def main(argv=None, today: Optional[date] = None) -> int:
             print("BŁĄD: nie znaleziono ulicy '%s' w miejscowości %s w bazie." % (args.street, args.city),
                   file=sys.stderr)
             return 2
-        rows, skipped = transactions_in_radius(
+        rows, excluded = transactions_in_radius(
             con, center[:2], args.radius, date_from, date_to, args.area_min, args.area_max)
     finally:
         con.close()
     summaries = [(label, summarize([r for r in rows if r["rodzaj_rynku"] == key])) for key, label in MARKETS]
     print(format_report(args.street, center[2], args.radius, date_from, date_to,
-                        args.area_min, args.area_max, summaries, skipped))
+                        args.area_min, args.area_max, summaries, excluded))
     return 0
 
 

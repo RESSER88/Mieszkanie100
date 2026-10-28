@@ -35,7 +35,7 @@ Rozważone dla strony: Flask lub FastAPI (wygodniejsze, ale wymagają środowisk
 |---|---|---|---|
 | 0 | Importer cen RCN dla Katowic, zapytanie okolicy (kod) | Zrobione | |
 | 1 | Repozytorium gotowe do testów na Raspberry Pi: skrypt `scripts/pi_check.sh`, instrukcja pierwszego pobrania i aktualizacji w `README.md` | Zrobione 2026-10-28 | 0 |
-| 2 | Test okolicy na prawdziwej bazie, sprawdzenie wartości `rodzaj_rynku`, wyjaśnienie 2 rekordów różniących WFS i GeoPackage | Czeka na wynik z Raspberry Pi | 1 |
+| 2 | Test okolicy na prawdziwej bazie, sprawdzenie wartości `rodzaj_rynku`, wyjaśnienie 2 rekordów różniących WFS i GeoPackage | W toku: raport uruchomiony, znaleziony i poprawiony błąd (garaże i udziały w porównaniu). Czeka na ponowny raport z Raspberry Pi. 2 rekordy niewyjaśnione. | 1 |
 | 3 | OSM dla śląskiego: pobranie PBF, `osmium` do GeoJSON (linie energetyczne z napięciem, stacje, maszty, kolej, drogi główne, przemysł, drogi w budowie i planowane, przedszkola, szkoły, przystanki), moduł `rcn/otoczenie.py` (najbliższe obiekty wg rodzaju) | Do zrobienia | 1 |
 | 4 | Mapa, pierwsza wersja: serwer na Raspberry Pi, formularz (ulica lub adres, cena, metraż), mapa z ofertą, transakcjami w promieniu i obiektami z OSM, karta z oceną ceny | Do zrobienia | 2, 3 |
 | 5 | Wklejanie linku: jeden portal (wybiera użytkownik), odczyt jednej oferty na żądanie, ustalenie położenia oferty, formularz jako zapas | Do zrobienia | 4 |

@@ -1,6 +1,7 @@
 """Tests for rcn/okolica.py. Run: python3 -m unittest discover -s tests -v"""
 import contextlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -15,13 +16,14 @@ from rcn import rcn_import as ri  # noqa: E402
 
 def rec(gid, ulica="ul. Braci Mniejszych", y=262000.0, x=494000.0, day="2026-01-15",
         cena_m2=8000.0, pow_m2=50.0, rynek="rynekWtorny", tran_id=None, obj_id=None,
-        miejscowosc="Katowice"):
+        miejscowosc="Katowice", funkcja="mieszkalna", udzial="1/1", rodzaj_trans="wolnyRynek"):
     row = dict.fromkeys(ri.Store._COLS)
     row.update(
         gid=gid, teryt="2469", tran_id=tran_id or "T%d" % gid, obj_id=obj_id or "O%d" % gid,
-        dok_data=day, rodzaj_rynku=rynek, rodzaj_obiektu="mieszkalna", liczba_izb=3,
+        dok_data=day, rodzaj_rynku=rynek, rodzaj_obiektu=funkcja, liczba_izb=3,
         pow_m2=pow_m2, cena_m2=cena_m2, miejscowosc=miejscowosc, ulica=ulica, nr="1",
-        y_pl1992=y, x_pl1992=x, raw_json="{}")
+        y_pl1992=y, x_pl1992=x,
+        raw_json=json.dumps({"NIER_UDZIAL": udzial, "TRAN_RODZAJ_TRANS": rodzaj_trans}))
     if cena_m2 is not None:
         row.update(tran_cena=cena_m2 * pow_m2, nier_cena=cena_m2 * pow_m2, obj_cena=cena_m2 * pow_m2)
     return row
@@ -94,7 +96,35 @@ class RadiusTests(unittest.TestCase):
 
     def test_reports_skipped_rows_without_coordinates(self):
         rows, skipped = self.run_query([rec(1, y=None, x=None), rec(2)])
-        self.assertEqual(([r["gid"] for r in rows], skipped), ([2], 1))
+        self.assertEqual(([r["gid"] for r in rows], skipped["bez_wspolrzednych"]), ([2], 1))
+
+    def test_only_residential_units_by_default(self):
+        # garages and parking spaces have prices of a few hundred zl/m2 and distort the median
+        rows, skipped = self.run_query([rec(1, funkcja="garażowa", cena_m2=331.0), rec(2)])
+        self.assertEqual([r["gid"] for r in rows], [2])
+        self.assertEqual(skipped["niemieszkalne"], 1)
+
+    def test_partial_shares_excluded(self):
+        rows, skipped = self.run_query([rec(1, udzial="1/2", cena_m2=71.0), rec(2)])
+        self.assertEqual([r["gid"] for r in rows], [2])
+        self.assertEqual(skipped["udzialy"], 1)
+
+    def test_non_free_market_excluded(self):
+        rows, skipped = self.run_query([rec(1, rodzaj_trans="sprzedazBezprzetargowa"), rec(2)])
+        self.assertEqual([r["gid"] for r in rows], [2])
+        self.assertEqual(skipped["nie_wolny_rynek"], 1)
+
+    def test_whole_share_written_as_other_fraction_is_kept(self):
+        rows, _ = self.run_query([rec(1, udzial="100/100"), rec(2, udzial="2/2")])
+        self.assertEqual(sorted(r["gid"] for r in rows), [1, 2])
+
+    def test_missing_share_and_transaction_type_are_kept(self):
+        rows, _ = self.run_query([rec(1, udzial=None, rodzaj_trans=None)])
+        self.assertEqual([r["gid"] for r in rows], [1])
+
+    def test_unit_filter_can_be_disabled(self):
+        rows, _ = self.run_query([rec(1, funkcja="garażowa")], funkcja=None)
+        self.assertEqual([r["gid"] for r in rows], [1])
 
 
 class SummaryTests(unittest.TestCase):
@@ -152,6 +182,14 @@ class ReportAndCliTests(unittest.TestCase):
         self.assertIn("próbka 12", text)
         self.assertIn("2026-01-15", text)
         self.assertIn("nie pewne daty transakcji", text)
+
+    def test_report_lists_exclusions(self):
+        rows = self.many(12) + [rec(200, funkcja="garażowa", cena_m2=300.0), rec(201, udzial="1/3")]
+        code, text = self.run_cli(rows)
+        self.assertEqual(code, 0)
+        self.assertIn("lokale niemieszkalne: 1", text)
+        self.assertIn("udziały w nieruchomości: 1", text)
+        self.assertIn("próbka 12", text)
 
     def test_small_sample_warning(self):
         code, text = self.run_cli(self.many(3))
