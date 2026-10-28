@@ -78,7 +78,7 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(oz.classify({"railway": "rail"}), "kolej")
         self.assertEqual(oz.classify({"highway": "trunk"}), "droga_glowna")
         self.assertEqual(oz.classify({"landuse": "industrial"}), "przemysl")
-        self.assertEqual(oz.classify({"power": "substation"}), "stacja_energetyczna")
+        self.assertEqual(oz.classify({"power": "substation", "voltage": "110000;15000"}), "stacja_energetyczna")
 
     def test_power_line_by_highest_voltage(self):
         self.assertEqual(oz.classify({"power": "line", "voltage": "110000"}), "linia_wn")
@@ -88,7 +88,20 @@ class ClassifyTests(unittest.TestCase):
 
     def test_roads_under_construction_and_planned(self):
         self.assertEqual(oz.classify({"highway": "construction", "construction": "primary"}), "droga_w_budowie")
-        self.assertEqual(oz.classify({"highway": "proposed"}), "droga_planowana")
+        self.assertEqual(oz.classify({"highway": "construction", "construction": "tertiary_link"}), "droga_w_budowie")
+        self.assertEqual(oz.classify({"highway": "construction"}), "droga_w_budowie")      # class unknown
+        self.assertEqual(oz.classify({"highway": "proposed", "proposed": "motorway"}), "droga_planowana")
+
+    def test_footpaths_and_local_roads_in_construction_are_ignored(self):
+        for kind in ("footway", "cycleway", "path", "service", "residential", "steps"):
+            self.assertIsNone(oz.classify({"highway": "construction", "construction": kind}), kind)
+            self.assertIsNone(oz.classify({"highway": "proposed", "proposed": kind}), kind)
+
+    def test_only_high_voltage_substations(self):
+        self.assertEqual(oz.classify({"power": "substation", "substation": "transmission"}), "stacja_energetyczna")
+        self.assertIsNone(oz.classify({"power": "substation", "substation": "minor_distribution"}))
+        self.assertIsNone(oz.classify({"power": "substation", "voltage": "15000"}))
+        self.assertIsNone(oz.classify({"power": "substation"}))
 
     def test_only_communication_towers_count_as_masts(self):
         self.assertEqual(oz.classify({"man_made": "mast"}), "maszt")
@@ -129,6 +142,13 @@ class StoreAndQueryTests(unittest.TestCase):
         seq_file([feature("n1", point(LON, LAT), amenity="school")], path, separator=False)
         self.assertEqual(oz.import_geojsonseq(path, os.path.join(self.tmp.name, "p.sqlite"))["zapisane"], 1)
 
+    def test_reimport_drops_objects_missing_from_new_file(self):
+        path = os.path.join(self.tmp.name, "small.geojsonseq")
+        seq_file([feature("n1", point(LON, LAT), amenity="school")], path)
+        oz.import_geojsonseq(path, self.db)
+        con = oz.connect(self.db)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM osm_obiekty").fetchone()[0], 1)
+
     def test_reimport_replaces_not_duplicates(self):
         oz.import_geojsonseq(self.seq, self.db)
         con = oz.connect(self.db)
@@ -163,6 +183,15 @@ class ReportTests(unittest.TestCase):
                  {"kategoria": "przedszkole", "odleglosc_m": 980.0, "nazwa": None, "szczegoly": ""}]
         text = oz.format_report("Braci Mniejszych", 1000, items, categories=("przedszkole",))
         self.assertIn("przedszkole: najbliżej 312 m (P1), w promieniu: 2", text)
+
+    def test_linear_objects_count_segments_and_stops_count_names(self):
+        items = [{"kategoria": "kolej", "odleglosc_m": 600.0, "nazwa": None, "szczegoly": ""}] * 3
+        items += [{"kategoria": "przystanek", "odleglosc_m": 200.0, "nazwa": "Płochy", "szczegoly": ""},
+                  {"kategoria": "przystanek", "odleglosc_m": 210.0, "nazwa": "Płochy", "szczegoly": ""},
+                  {"kategoria": "przystanek", "odleglosc_m": 400.0, "nazwa": "Kościół", "szczegoly": ""}]
+        text = oz.format_report("X", 1000, items, categories=("kolej", "przystanek"))
+        self.assertIn("kolej: najbliżej 600 m, odcinków w danych w promieniu: 3", text)
+        self.assertIn("przystanek: najbliżej 200 m (Płochy), różnych nazw w promieniu: 2", text)
 
     def test_cli_near_uses_street_center_from_rcn_db(self):
         from rcn import rcn_import as ri

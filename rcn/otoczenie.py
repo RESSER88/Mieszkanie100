@@ -26,7 +26,7 @@ _ECC = 2 * math.sqrt(_N) / (1 + _N)
 CATEGORIES = (
     ("linia_wn", "linia wysokiego napięcia (110 kV i więcej)"),
     ("linia_inna", "inna linia energetyczna lub bez napięcia w danych"),
-    ("stacja_energetyczna", "stacja energetyczna"),
+    ("stacja_energetyczna", "stacja energetyczna WN (110 kV i więcej)"),
     ("maszt", "maszt lub wieża telekomunikacyjna"),
     ("kolej", "kolej"),
     ("droga_glowna", "droga główna"),
@@ -43,6 +43,9 @@ CATEGORIES = (
 LABELS = dict(CATEGORIES)
 _MAIN_ROADS = {"motorway", "trunk", "primary", "motorway_link", "trunk_link", "primary_link"}
 _LANDUSE = {"industrial": "przemysl", "landfill": "skladowisko", "quarry": "kamieniolom"}
+# Road classes worth reporting when under construction or planned; footpaths and local streets are noise.
+_ROAD_CLASSES = {"motorway", "trunk", "primary", "secondary", "tertiary"}
+LINEAR = {"linia_wn", "linia_inna", "kolej", "droga_glowna", "droga_w_budowie", "droga_planowana"}
 
 
 def wgs84_to_pl1992(lat: float, lon: float) -> Tuple[float, float]:
@@ -77,10 +80,11 @@ def classify(tags: Dict[str, str]) -> Optional[str]:
         return "szkola"
     if highway == "bus_stop" or railway == "tram_stop" or tags.get("public_transport") == "platform":
         return "przystanek"
-    if highway == "construction":
-        return "droga_w_budowie"
-    if highway == "proposed":
-        return "droga_planowana"
+    if highway in ("construction", "proposed"):
+        road_class = (tags.get(highway) or "").replace("_link", "")
+        if road_class and road_class not in _ROAD_CLASSES:
+            return None
+        return "droga_w_budowie" if highway == "construction" else "droga_planowana"
     if highway in _MAIN_ROADS:
         return "droga_glowna"
     if railway == "rail":
@@ -90,7 +94,9 @@ def classify(tags: Dict[str, str]) -> Optional[str]:
         voltage = _max_voltage(tags.get("voltage"))
         return "linia_wn" if voltage is not None and voltage >= 110000 else "linia_inna"
     if power == "substation":
-        return "stacja_energetyczna"
+        voltage = _max_voltage(tags.get("voltage"))
+        high = (voltage is not None and voltage >= 110000) or tags.get("substation") == "transmission"
+        return "stacja_energetyczna" if high else None
     man_made = tags.get("man_made")
     if man_made == "mast" or (man_made == "tower" and tags.get("tower:type") == "communication"):
         return "maszt"
@@ -220,7 +226,8 @@ def import_geojsonseq(path: str, db_path: str) -> Dict[str, int]:
                          json.dumps(tags, ensure_ascii=False), gtype, json.dumps(coords),
                          min(ys), max(ys), min(xs), max(xs)))
             stats["zapisane"] += 1
-    with con:
+    with con:  # full refresh: objects missing from the new extract must disappear
+        con.execute("DELETE FROM osm_obiekty")
         con.executemany("INSERT OR REPLACE INTO osm_obiekty VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
     con.close()
     return stats
@@ -261,7 +268,13 @@ def format_report(street: str, radius_m: float, items: List[dict],
         text = "%s: najbliżej %.0f m" % (label, first["odleglosc_m"])
         if first.get("nazwa"):
             text += " (%s)" % first["nazwa"]
-        text += ", w promieniu: %d" % len(mine)
+        if key in LINEAR:
+            text += ", odcinków w danych w promieniu: %d" % len(mine)
+        elif key == "przystanek":
+            names = {i["nazwa"] for i in mine if i.get("nazwa")}
+            text += ", różnych nazw w promieniu: %d" % (len(names) or len(mine))
+        else:
+            text += ", w promieniu: %d" % len(mine)
         if first.get("szczegoly"):
             text += " · " + first["szczegoly"]
         lines.append(text)

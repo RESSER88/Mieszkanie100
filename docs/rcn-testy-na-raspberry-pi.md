@@ -104,3 +104,18 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/otoczenie.py import --geojsons
 ```
 
 Do sprawdzenia: ile obiektów zapisano, ile błędnych, czy najbliższe przedszkola, szkoły, przystanki i linie energetyczne zgadzają się z tym, co użytkownik zna z okolicy.
+
+### Pierwszy wynik na prawdziwym wycinku (Raspberry Pi, 2026-10-28, kod `0b0182d`)
+
+- Wycinek Geofabrik `slaskie-261027.osm.pbf`: 186 362 801 bajtów, pobranie 3 min 27 s. Po filtrze `osmium`: 6,2 MB PBF, 52 MB GeoJSON.
+- Import: 82 798 obiektów zapisanych, 54 586 pominiętych (głównie słupy i węzły dołączone do linii), 0 błędnych.
+- Raport dla ul. Braci Mniejszych, 3 km: linia 110 kV (Tauron, „Kopanina–Wirek, Brynów–Ligota") 1139 m, kolej 633 m, teren przemysłowy 226 m, oczyszczalnia ścieków Panewniki 2392 m, przedszkole 135 m, szkoła 83 m, przystanek 221 m („Kokociniec Płochy").
+
+Znalezione problemy i poprawki (kod po `0b0182d`):
+
+- Drogi w budowie i planowane to w większości chodniki (`footway`). Teraz liczą się tylko klasy `motorway`, `trunk`, `primary`, `secondary`, `tertiary` (z odmianami `_link`) oraz drogi bez podanej klasy.
+- 94 „stacje energetyczne" to w większości małe stacje transformatorowe. Teraz tylko stacje z napięciem od 110 kV lub oznaczone `substation=transmission`.
+- Liczniki dla linii i dróg liczyły odcinki w danych, a nie całe obiekty. Raport mówi teraz wprost „odcinków w danych". Przystanki liczone są wg różnych nazw (słupek i peron tego samego przystanku to jedna nazwa).
+- Ponowny import czyści tabelę, żeby obiekty, które po zmianie reguł przestały się kwalifikować, nie zostały w bazie.
+
+Do ponownego sprawdzenia przez użytkownika: czy najbliższe obiekty zgadzają się z tym, co zna z okolicy.
