@@ -84,6 +84,44 @@ def classify(s: Dict[str, Any], today_year: int, years: int = YEARS) -> Tuple[st
     return LABELS[3], None
 
 
+def age_index(con: sqlite3.Connection, today_year: int) -> Dict[str, Dict[str, Any]]:
+    """Building key -> {"wiek": label, "rok": approximate year or None, "stal_w": first sale year}."""
+    index = {}
+    for key, s in building_stats(con).items():
+        label, year = classify(s, today_year)
+        index[key] = {"wiek": label, "rok": year, "stal_w": int(s["pierwsza"][:4])}
+    return index
+
+
+def age_of(index: Dict[str, Dict[str, Any]], unit_id: Optional[str], street: Optional[str],
+           number: Optional[str]) -> Dict[str, Any]:
+    """Age entry for one sale record; "nieznany" when the building is not in the index."""
+    key = building_key(unit_id, street, number)
+    return index.get(key) or {"wiek": LABELS[3], "rok": None, "stal_w": None}
+
+
+def is_new(entry: Dict[str, Any]) -> bool:
+    return entry.get("wiek") == LABELS[0]
+
+
+NEW_SECONDARY = "Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)"
+
+
+def secondary_in_new(rows, index: Dict[str, Dict[str, Any]]) -> list:
+    """Secondary-market sales in buildings estimated at up to 10 years (for a separate median)."""
+    return [r for r in rows if r["rodzaj_rynku"] == "rynekWtorny"
+            and is_new(age_of(index, r.get("obj_id"), r.get("ulica"), r.get("nr")))]
+
+
+def describe(entry: Dict[str, Any]) -> str:
+    """Short text for a card, e.g. "do 10 lat (szacunek), rok ok. 2021" or "nieznany, stał już w 2017"."""
+    if entry.get("rok"):
+        return "%s, rok ok. %d" % (entry["wiek"], entry["rok"])
+    if entry["wiek"] == LABELS[3] and entry.get("stal_w"):
+        return "%s, stał już w %d" % (entry["wiek"], entry["stal_w"])
+    return entry["wiek"]
+
+
 def main(argv=None, today: Optional[date] = None) -> int:
     p = argparse.ArgumentParser(description="Przybliżony wiek budynku z RCN: sprawdzenie, czy metoda działa.")
     sub = p.add_subparsers(dest="command", required=True)

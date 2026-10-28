@@ -191,6 +191,29 @@ class ReportAndCliTests(unittest.TestCase):
         self.assertIn("2026-01-15", text)
         self.assertIn("nie pewne daty transakcji", text)
 
+    def test_report_has_new_building_line(self):
+        unit = "246901_1.0003.AR_45.14/15.5_BUD.%d_LOK"
+        rows = self.many(12)                                                       # old or unknown buildings
+        rows += [rec(100, rynek="rynekPierwotny", day="2025-03-01", obj_id=unit % 1, cena_m2=12000.0)]
+        rows += [rec(101 + i, obj_id=unit % (2 + i), cena_m2=11500.0 + i) for i in range(10)]
+        code, text = self.run_cli(rows)
+        self.assertEqual(code, 0)
+        line = [t for t in text.splitlines() if t.startswith("Rynek wtórny, tylko budynki do 10 lat")]
+        self.assertEqual(line, ["Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN): próbka 10 transakcji,"
+                                " okres 2026-01-15 .. 2026-01-15"])
+        self.assertIn("próbka 22", text)                                           # all secondary sales
+
+    def test_runs_as_a_script(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "t.sqlite")
+            make_store(self.many(3), path).close()
+            script = os.path.join(os.path.dirname(__file__), "..", "rcn", "okolica.py")
+            done = subprocess.run([sys.executable, script, "--db", path, "--street", "Braci Mniejszych"],
+                                  capture_output=True, text=True, cwd=d)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("tylko budynki do 10 lat", done.stdout)
+
     def test_report_lists_exclusions(self):
         rows = self.many(12) + [rec(200, funkcja="garażowa", cena_m2=300.0), rec(201, udzial="1/3")]
         code, text = self.run_cli(rows)

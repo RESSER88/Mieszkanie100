@@ -61,6 +61,21 @@ def wgs84_to_pl1992(lat: float, lon: float) -> Tuple[float, float]:
     return _N0 + _K0 * _RECT * north, _E0 + _K0 * _RECT * east
 
 
+_BETA = (_N / 2 - 2 * _N ** 2 / 3 + 37 * _N ** 3 / 96, _N ** 2 / 48 + _N ** 3 / 15, 17 * _N ** 3 / 480)
+_DELTA = (2 * _N - 2 * _N ** 2 / 3 - 2 * _N ** 3, 7 * _N ** 2 / 3 - 8 * _N ** 3 / 5, 56 * _N ** 3 / 15)
+
+
+def pl1992_to_wgs84(north: float, east: float) -> Tuple[float, float]:
+    """(lat, lon) in degrees for EPSG:2180 (northing, easting); inverse of wgs84_to_pl1992 (map display)."""
+    xi = (north - _N0) / (_K0 * _RECT)
+    eta = (east - _E0) / (_K0 * _RECT)
+    xi_p = xi - sum(b * math.sin(2 * j * xi) * math.cosh(2 * j * eta) for j, b in enumerate(_BETA, 1))
+    eta_p = eta - sum(b * math.cos(2 * j * xi) * math.sinh(2 * j * eta) for j, b in enumerate(_BETA, 1))
+    chi = math.asin(math.sin(xi_p) / math.cosh(eta_p))
+    phi = chi + sum(d * math.sin(2 * j * chi) for j, d in enumerate(_DELTA, 1))
+    return math.degrees(phi), math.degrees(_LON0 + math.atan2(math.sinh(eta_p), math.cos(xi_p)))
+
+
 def _max_voltage(text: Optional[str]) -> Optional[float]:
     values = []
     for part in (text or "").split(";"):
@@ -234,8 +249,8 @@ def import_geojsonseq(path: str, db_path: str) -> Dict[str, int]:
 
 
 def nearby(con: sqlite3.Connection, center: Tuple[float, float], radius_m: float,
-           categories: Optional[Sequence[str]] = None) -> List[dict]:
-    """Objects within the radius, nearest first, with distance, name and details."""
+           categories: Optional[Sequence[str]] = None, geometry: bool = False) -> List[dict]:
+    """Objects within the radius, nearest first, with distance, name and details (and the shape for a map)."""
     cy, cx = center
     sql = ("SELECT id, kategoria, nazwa, tagi_json, typ_geometrii, geom_json FROM osm_obiekty"
            " WHERE max_y >= ? AND min_y <= ? AND max_x >= ? AND min_x <= ?")
@@ -250,8 +265,11 @@ def nearby(con: sqlite3.Connection, center: Tuple[float, float], radius_m: float
             coords = tuple(coords)
         distance = distance_to_shape(center, gtype, coords)
         if distance <= radius_m:
-            found.append({"id": oid, "kategoria": category, "nazwa": name, "odleglosc_m": distance,
-                          "szczegoly": _details(category, json.loads(tags_json))})
+            item = {"id": oid, "kategoria": category, "nazwa": name, "odleglosc_m": distance,
+                    "szczegoly": _details(category, json.loads(tags_json))}
+            if geometry:
+                item["typ_geometrii"], item["geometria"] = gtype, coords
+            found.append(item)
     return sorted(found, key=lambda item: item["odleglosc_m"])
 
 

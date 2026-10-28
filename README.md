@@ -33,4 +33,12 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && bash scripts/pi_check.sh
 
 `scripts/pi_check.sh` uruchamia testy jednostkowe, a jeśli w folderze jest `rcn_test.sqlite`, także raport bazy i raport okolicy. Inną bazę wskazuje zmienna `RCN_DB`.
 
+## Mapa na Raspberry Pi
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/mapa.py
+```
+
+Serwer wypisuje adres (np. `http://192.168.1.20:8100`). Otwórz go na telefonie lub komputerze w sieci domowej, wklej link do ogłoszenia albo wpisz ulicę, cenę i metraż. Zatrzymanie: Ctrl+C. Serwer nie ma logowania, więc działa tylko w sieci domowej (bez przekierowania portu w routerze). Pobiera wyłącznie strony z listy portali.
+
 Kolejka prac i technologia: `docs/superpowers/plans/2026-10-28-kolejka-prac.md`.

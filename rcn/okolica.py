@@ -10,12 +10,16 @@ import argparse
 import calendar
 import json
 import math
+import os
 import sqlite3
 import statistics
 import sys
 from dataclasses import dataclass
 from datetime import date
 from typing import Dict, List, Optional, Tuple
+
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 MIN_SAMPLE = 10
 MARKETS = (("rynekWtorny", "Rynek wtórny"), ("rynekPierwotny", "Rynek pierwotny"))
@@ -224,9 +228,12 @@ def main(argv=None, today: Optional[date] = None) -> int:
             return 2
         rows, excluded = transactions_in_radius(
             con, center[:2], args.radius, date_from, date_to, args.area_min, args.area_max)
+        from rcn import wiek  # late import: wiek imports this module
+        ages = wiek.age_index(con, today.year)
     finally:
         con.close()
     summaries = [(label, summarize([r for r in rows if r["rodzaj_rynku"] == key])) for key, label in MARKETS]
+    summaries.append((wiek.NEW_SECONDARY, summarize(wiek.secondary_in_new(rows, ages))))
     print(format_report(args.street, center[2], args.radius, date_from, date_to,
                         args.area_min, args.area_max, summaries, excluded))
     return 0

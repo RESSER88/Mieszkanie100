@@ -91,6 +91,34 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(self.age(BUD_D), ("granica około 10 lat", 2015))
 
 
+class IndexTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = db(os.path.join(self.tmp.name, "rcn.sqlite"))
+        self.index = wiek.age_index(self.store.con, 2026)
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def test_sale_in_new_building(self):
+        entry = wiek.age_of(self.index, NEW + "_BUD.99_LOK", "ul. Szurmana", "2")
+        self.assertTrue(wiek.is_new(entry))
+        self.assertEqual(wiek.describe(entry), "do 10 lat (szacunek), rok ok. 2018")
+
+    def test_unknown_building_says_since_when_it_stood(self):
+        entry = wiek.age_of(self.index, UNK + "_BUD.1_LOK", "ul. Inna", "5")
+        self.assertFalse(wiek.is_new(entry))
+        self.assertEqual(wiek.describe(entry), "nieznany, stał już w 2021")
+
+    def test_building_missing_from_index(self):
+        entry = wiek.age_of(self.index, "246901_9.AR_1.1_BUD.1_LOK", "ul. Nowa", "1")
+        self.assertEqual(wiek.describe(entry), "nieznany")
+        self.assertEqual(wiek.describe(wiek.age_of(self.index, NEW + "_BUD.1_LOK", "ul. Szurmana", "10")),
+                         "nieznany")
+        self.assertEqual(wiek.describe(self.index[BUD_B]), "ponad 10 lat")
+
+
 class ReportTests(unittest.TestCase):
     def test_diag_report(self):
         with tempfile.TemporaryDirectory() as d:

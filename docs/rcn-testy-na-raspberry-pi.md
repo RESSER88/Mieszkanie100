@@ -284,3 +284,18 @@ curl -sS -m 60 "https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZ
 - Szurmana 2–18 (11 adresów, w tym zapisy „2-4" i „6-8"): wszystkie „do 10 lat", rok ok. 2021. Zgodne z rzeczywistością.
 - Braci Mniejszych: 11 z 12 „nieznany", bo najwcześniejsze sprzedaże są wtórne z lat 2017–2019 (budynki już stały, ale z RCN nie wiadomo, od kiedy); nr 7 „do 10 lat" (2022). Późniejsze sprzedaże pierwotne w budynkach nr 2, 4, 5, 5A, 5B (2021–2025) to pojedyncze lokale od dewelopera, nie data budowy.
 - Ocena: metoda nadaje się do filtra „budynki do 10 lat" tam, gdzie RCN ma sprzedaż pierwotną (Szurmana). Dla budynków ze sprzedażą wyłącznie wtórną daje tylko „stał już w roku X"; tam rok budowy trzeba brać z ogłoszenia (np. `Build_year` z Otodom) z adnotacją o źródle.
+
+## Wiek budynku w raporcie i karcie, mapa (pozycje 3b i 4, 2026-10-28)
+
+- Raport okolicy (`rcn/okolica.py`) ma dodatkową linię „Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)" z własną próbką i medianą.
+- Karta (`rcn/karta.py`) pokazuje: rok budowy z ogłoszenia z dopiskiem „(z ogłoszenia)", wiek budynku z RCN dla najbliższego budynku z transakcjami do 30 m od punktu oferty (tylko gdy położenie jest dokładne), medianę dla budynków do 10 lat i wynik oferty na jej tle, wiek budynku przy każdej najbliższej sprzedaży.
+- Mapa (`rcn/mapa.py`): serwer na porcie 8100. Strona z polem na link (albo wpis ręczny: ulica, cena, metraż), mapa Leaflet z kafelkami OpenStreetMap, sprzedaże w promieniu (zielone poniżej typowego zakresu, szare w zakresie, czerwone powyżej, czarna obwódka dla budynków do 10 lat), obiekty z OSM jako warstwy do włączania (do 1 km wszystkie, maks. 40 na rodzaj, i najbliższy każdego rodzaju do 3 km), pełna karta pod mapą. Serwer pobiera tylko strony portali z listy, nie ma logowania, więc działa tylko w sieci domowej.
+- Sprawdzone w chmurze: 162 testy, strona w Chromium na szerokości komputera i telefonu (jasny i ciemny motyw), bez błędów JavaScript. Na Pi nie sprawdzone.
+
+Uruchomienie na Pi (po `git pull`):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git pull && bash scripts/pi_check.sh && python3 rcn/mapa.py
+```
+
+Potem na telefonie w tej samej sieci otworzyć adres wypisany w linii „Mapa działa: …”.

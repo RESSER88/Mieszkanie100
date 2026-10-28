@@ -214,5 +214,14 @@ class ReportTests(unittest.TestCase):
             self.assertIn("przedszkole: najbliżej 300 m (P1)", out.getvalue())
 
 
+class InverseProjectionTests(unittest.TestCase):
+    def test_round_trip_within_a_centimetre(self):
+        for lat, lon in ((50.231846, 18.968098), (50.0, 19.0), (49.4, 17.2), (54.8, 23.9)):
+            y, x = oz.wgs84_to_pl1992(lat, lon)
+            back = oz.pl1992_to_wgs84(y, x)
+            self.assertLess(abs(back[0] - lat) * 111000, 0.01)
+            self.assertLess(abs(back[1] - lon) * 71000, 0.01)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,10 +21,11 @@ TODAY = date(2026, 10, 28)
 LAT, LON = 50.231846, 18.968098
 
 
-def sale(gid, m2_price, area=65.0, market="rynekWtorny", north_m=0.0, day="2026-03-01"):
+def sale(gid, m2_price, area=65.0, market="rynekWtorny", north_m=0.0, day="2026-03-01", obj_id=None):
     y, x = oz.wgs84_to_pl1992(LAT, LON)
     row = dict.fromkeys(ri.Store._COLS)
-    row.update(gid=gid, teryt="2469", tran_id="T%d" % gid, obj_id="O%d" % gid, dok_data=day, rodzaj_rynku=market,
+    row.update(gid=gid, teryt="2469", tran_id="T%d" % gid, obj_id=obj_id or "O%d" % gid, dok_data=day,
+               rodzaj_rynku=market,
                rodzaj_obiektu="mieszkalna", pow_m2=area, cena_m2=m2_price, obj_cena=m2_price * area,
                tran_cena=m2_price * area, nier_cena=m2_price * area, miejscowosc="Katowice",
                ulica="ul. Szurmana", nr=str(gid), y_pl1992=y + north_m, x_pl1992=x,
@@ -78,7 +79,7 @@ class CardTests(unittest.TestCase):
     def test_report_text(self):
         text = kt.format_card(self.card())
         for expected in ("839 000 zł", "65,08 m²", "12 892 zł/m²", "powyżej typowego zakresu", "próbka 20",
-                         "Lokalizacja w ogłoszeniu jest przybliżona", "ceny ofertowej", "rok budowy 2020",
+                         "Lokalizacja w ogłoszeniu jest przybliżona", "ceny ofertowej", "rok budowy 2020 (z ogłoszenia)",
                          "Najbliższe sprzedaże"):
             self.assertIn(expected, text)
 
@@ -104,6 +105,58 @@ class CardTests(unittest.TestCase):
         card = self.card(osm_con=con)
         con.close()
         self.assertIn("przedszkole: najbliżej 300 m (P1)", kt.format_card(card))
+
+
+class BuildingAgeTests(unittest.TestCase):
+    UNIT = "246901_1.0003.AR_45.14/15.5_BUD.%d_LOK"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.rcn = os.path.join(self.tmp.name, "rcn.sqlite")
+        rows = [sale(i, 10000.0 + 50 * i, north_m=10.0 * i) for i in range(1, 13)]           # unknown age
+        # one new block at the offer point, all units with nr "500": first sale primary in 2021
+        new = [sale(500, 12000.0, market="rynekPierwotny", day="2021-05-01", obj_id=self.UNIT % 1)]
+        new += [sale(501 + i, 12500.0 + 10 * i, obj_id=self.UNIT % (2 + i)) for i in range(10)]
+        for r in new:
+            r["nr"] = "500"
+        rcn_db(self.rcn, rows + new)
+        self.offer = pt.parse_listing(tp.NO_HTML, tp.NO_URL)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def card(self):
+        con = __import__("sqlite3").connect(self.rcn)
+        try:
+            return kt.build_card(self.offer, con, today=TODAY)
+        finally:
+            con.close()
+
+    def test_new_building_median_and_position(self):
+        card = self.card()
+        new = dict(card["porownanie"])["Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)"]
+        self.assertEqual(new.n, 10)
+        self.assertEqual(card["polozenie_nowe"], "powyżej typowego zakresu")   # 12 892 vs 12 500..12 590
+        text = kt.format_card(card)
+        self.assertIn("na tle sprzedaży wtórnych w budynkach do 10 lat", text)
+
+    def test_every_sale_carries_its_building_age_for_the_map(self):
+        card = self.card()
+        self.assertEqual(len(card["transakcje"]), 22)
+        ages = {r["nr"]: r["wiek"] for r in card["transakcje"]}
+        self.assertEqual(ages["500"], "do 10 lat (szacunek), rok ok. 2021")
+        self.assertTrue(ages["1"].startswith("nieznany"))
+
+    def test_building_age_from_listing_and_rcn(self):
+        self.offer["lokalizacja_przyblizona"] = False
+        text = kt.format_card(self.card())
+        self.assertIn("rok budowy 2020 (z ogłoszenia)", text)
+        self.assertIn("Wiek budynku z RCN (najbliższy budynek z transakcjami, 0 m): do 10 lat (szacunek),"
+                      " rok ok. 2021", text)
+
+    def test_no_rcn_building_guess_for_approximate_location(self):
+        text = kt.format_card(self.card())                    # the Nieruchomosci-online point is approximate
+        self.assertIn("Wiek budynku z RCN: nie ustalono, bo położenie oferty jest przybliżone", text)
 
 
 class CliTests(unittest.TestCase):
