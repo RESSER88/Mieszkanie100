@@ -30,10 +30,13 @@ class CardError(Exception):
 def build_card(offer: Dict[str, Any], rcn_con: sqlite3.Connection, osm_con: Optional[sqlite3.Connection] = None,
                radius_m: float = 500.0, months: int = 24, area_tol: float = 0.3,
                osm_radius_m: float = 3000.0, today: Optional[date] = None) -> Dict[str, Any]:
-    if offer.get("lat") is None or offer.get("lon") is None:
+    if offer.get("y_pl1992") is not None and offer.get("x_pl1992") is not None:
+        center = (offer["y_pl1992"], offer["x_pl1992"])
+    elif offer.get("lat") is not None and offer.get("lon") is not None:
+        center = otoczenie.wgs84_to_pl1992(offer["lat"], offer["lon"])
+    else:
         raise CardError("ogłoszenie nie podaje współrzędnych; ustalenie położenia z adresu jest dopiero w planie")
     today = today or date.today()
-    center = otoczenie.wgs84_to_pl1992(offer["lat"], offer["lon"])
     date_from, date_to = okolica.months_ago(today, months).isoformat(), today.isoformat()
     area = offer.get("powierzchnia_m2")
     area_min, area_max = (area * (1 - area_tol), area * (1 + area_tol)) if area else (None, None)
@@ -87,6 +90,8 @@ def format_card(card: Dict[str, Any]) -> str:
                              for k, v in o["wzmianki"].items())
         source = "z opisu" if o.get("wzmianki_zrodlo") == "opis" else "z całej strony, mniej pewne"
         lines.append("Wzmianki w treści ogłoszenia (%s): %s" % (source, mentions))
+    if o.get("polozenie_uwaga"):
+        lines.append(o["polozenie_uwaga"])
     if o.get("lokalizacja_przyblizona"):
         lines.append("Lokalizacja w ogłoszeniu jest przybliżona, więc promień liczony jest od przybliżonego punktu.")
     area_min, area_max = card["zakres_m2"]
@@ -126,31 +131,82 @@ def format_card(card: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _offer_from_link(args) -> Optional[Dict[str, Any]]:
+    try:
+        url = clean_url(args.url)
+    except ValueError as exc:
+        print("BŁĄD: %s" % exc, file=sys.stderr)
+        return None
+    if args.file:
+        try:
+            with open(args.file, encoding="utf-8", errors="replace") as f:
+                html = f.read()
+        except OSError:
+            print("BŁĄD: nie ma pliku %s (nazwę pokazuje linia „Zapisano:” w wyniku probe)" % args.file,
+                  file=sys.stderr)
+            return None
+    else:
+        status, html = fetch(url)
+        if status != 200 or html is None:
+            print("BŁĄD: portal zwrócił HTTP %d. Nie ponawiać w pętli. Można zapisać stronę w przeglądarce"
+                  " i podać ją przez --file albo wpisać dane ręcznie (--ulica, --cena, --metraz)." % status,
+                  file=sys.stderr)
+            return None
+        save_html(url, html, os.path.join("ref", "oferty"))
+    return portale.parse_listing(html, url)
+
+
+def _manual_offer(args) -> Optional[Dict[str, Any]]:
+    """Offer typed in by hand; position is the mean of RCN records on the street (approximate)."""
+    rcn = sqlite3.connect(args.rcn_db)
+    try:
+        center = okolica.find_center(rcn, args.ulica, args.miasto)
+    finally:
+        rcn.close()
+    if center is None:
+        return None
+    cena, metraz = portale.to_number(args.cena), portale.to_number(args.metraz)
+    return {"portal": "wpis ręczny", "id": None, "url": None, "tytul": None, "cena": cena,
+            "powierzchnia_m2": metraz, "cena_m2": round(cena / metraz, 2) if cena and metraz else None,
+            "pokoje": None, "pietro": None, "rok_budowy": args.rok, "rynek": args.rynek, "ulica": args.ulica,
+            "miejscowosc": args.miasto, "dzielnica": None, "lat": None, "lon": None,
+            "y_pl1992": center[0], "x_pl1992": center[1], "lokalizacja_przyblizona": False, "wzmianki": {},
+            "wzmianki_zrodlo": None, "brakuje": [],
+            "polozenie_uwaga": "Położenie przybliżone: środek ulicy %s z %d rekordów RCN." % (args.ulica, center[2])}
+
+
 def main(argv=None, today: Optional[date] = None) -> int:
-    p = argparse.ArgumentParser(description="Karta mieszkania z linku do ogłoszenia.")
-    p.add_argument("url")
+    p = argparse.ArgumentParser(description="Karta mieszkania z linku do ogłoszenia albo z danych wpisanych ręcznie.")
+    p.add_argument("url", nargs="?")
     p.add_argument("--file", help="zapisana strona ogłoszenia (bez pobierania z internetu)")
+    p.add_argument("--cena", help="wpis ręczny: cena ofertowa w zł")
+    p.add_argument("--metraz", help="wpis ręczny: powierzchnia w m²")
+    p.add_argument("--ulica", help="wpis ręczny: ulica, położenie ze środka ulicy w bazie RCN")
+    p.add_argument("--miasto", default="Katowice")
+    p.add_argument("--rynek", choices=["wtorny", "pierwotny"])
+    p.add_argument("--rok", type=int, help="wpis ręczny: rok budowy")
     p.add_argument("--rcn-db", default="rcn_test.sqlite")
     p.add_argument("--osm-db", default="osm_slask.sqlite")
     p.add_argument("--radius", type=float, default=500.0)
     p.add_argument("--months", type=int, default=24)
     p.add_argument("--area-tol", type=float, default=0.3, help="dopuszczalna różnica metrażu, ułamek (0.3 = 30%%)")
     args = p.parse_args(argv)
-    try:
-        url = clean_url(args.url)
-    except ValueError as exc:
-        print("BŁĄD: %s" % exc, file=sys.stderr)
-        return 2
-    if args.file:
-        with open(args.file, encoding="utf-8") as f:
-            html = f.read()
-    else:
-        status, html = fetch(url)
-        if status != 200 or html is None:
-            print("BŁĄD: portal zwrócił HTTP %d. Nie ponawiać w pętli." % status, file=sys.stderr)
+    if args.ulica:
+        if not (args.cena and args.metraz):
+            print("BŁĄD: wpis ręczny wymaga --cena, --metraz i --ulica", file=sys.stderr)
             return 2
-        save_html(url, html, os.path.join("ref", "oferty"))
-    offer = portale.parse_listing(html, url)
+        offer = _manual_offer(args)
+        if offer is None:
+            print("BŁĄD: nie znaleziono ulicy '%s' w miejscowości %s w bazie RCN." % (args.ulica, args.miasto),
+                  file=sys.stderr)
+            return 2
+    elif args.url:
+        offer = _offer_from_link(args)
+        if offer is None:
+            return 2
+    else:
+        print("BŁĄD: podaj link do ogłoszenia albo --ulica, --cena i --metraz", file=sys.stderr)
+        return 2
     rcn = sqlite3.connect(args.rcn_db)
     osm = otoczenie.connect(args.osm_db) if os.path.exists(args.osm_db) else None
     try:

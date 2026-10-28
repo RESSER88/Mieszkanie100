@@ -89,6 +89,21 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(result["bledne_bloki"], 1)
 
 
+class ProbeFileTests(unittest.TestCase):
+    def test_probe_saved_file_without_network(self):
+        import contextlib, io, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "olx.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(HTML)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = of.main(["probe", "https://www.olx.pl/d/oferta/x-ID1cOp4L.html", "--file", path])
+            self.assertEqual(code, 0)
+            self.assertIn("Plik: %s" % path, out.getvalue())
+            self.assertIn("next_data.props.pageProps.ad.area = 118.5", out.getvalue())
+
+
 class ReportTests(unittest.TestCase):
     def test_report_is_compact_and_says_what_to_paste(self):
         text = of.format_probe("https://x.pl/a", 200, "ref/oferty/x.html", of.extract_structured(HTML))

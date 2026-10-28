@@ -114,6 +114,45 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("Karta mieszkania", out.getvalue())
 
+    def test_missing_file_is_a_message_not_a_traceback(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = kt.main([tp.NO_URL, "--file", "/nie/ma/takiego.html"], today=TODAY)
+        self.assertEqual(code, 2)
+        self.assertIn("nie ma pliku", err.getvalue())
+
+    def test_manual_card_uses_street_center_from_rcn(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "rcn.sqlite")
+            rcn_db(db, [sale(i, 10000.0 + 50 * i, north_m=10.0 * i) for i in range(1, 15)])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = kt.main(["--cena", "839000", "--metraz", "65,08", "--ulica", "Szurmana", "--rcn-db", db],
+                               today=TODAY)
+            text = out.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("839 000 zł, 65,08 m², 12 892 zł/m²", text)
+            self.assertIn("Położenie przybliżone: środek ulicy Szurmana z 14 rekordów RCN", text)
+            self.assertIn("próbka 14", text)
+
+    def test_manual_card_unknown_street(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "rcn.sqlite")
+            rcn_db(db, [sale(1, 10000.0)])
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                code = kt.main(["--cena", "500000", "--metraz", "50", "--ulica", "Nieznana", "--rcn-db", db],
+                               today=TODAY)
+            self.assertEqual(code, 2)
+            self.assertIn("nie znaleziono ulicy", err.getvalue())
+
+    def test_needs_link_or_manual_data(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = kt.main([], today=TODAY)
+        self.assertEqual(code, 2)
+        self.assertIn("podaj link", err.getvalue())
+
     def test_missing_coordinates_exit_code(self):
         with tempfile.TemporaryDirectory() as d:
             html = os.path.join(d, "ogl.html")

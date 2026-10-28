@@ -175,3 +175,27 @@ Błędy i poprawki:
 
 - Gratka: wzmianki „ogród 72 m², taras 28 m²" pochodziły z ogłoszeń polecanych na tej samej stronie. Wzmianki są teraz brane tylko z opisu ogłoszenia, a gdy portal nie daje opisu, z całej strony z oznaczeniem „mniej pewne".
 - Gratka: „brak miejscowości", bo lokalizacja jest listą miejsc. Teraz miasto i dzielnica są odczytywane z listy (pomijając województwo).
+
+### OLX odmawia pobrania (2026-10-28)
+
+`oferta.py probe` dla ogłoszenia z OLX dostał HTTP 403. Decyzja: nie obchodzimy blokady (np. podszywaniem się pod przeglądarkę). Są dwie drogi:
+
+1. Strona zapisana w zwykłej przeglądarce (Ctrl+S, „Strona internetowa, tylko HTML") i skopiowana na Raspberry Pi do `ref/oferty/`. Potem rozpoznanie i karta z pliku, bez pobierania:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && ls -l ref/oferty/
+```
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/oferta.py probe "https://www.olx.pl/d/oferta/3-pokoje-duze-okna-park-kosciuszki-CID3-ID1cOp4L.html" --file ref/oferty/olx.html
+```
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://www.olx.pl/d/oferta/3-pokoje-duze-okna-park-kosciuszki-CID3-ID1cOp4L.html" --file ref/oferty/olx.html
+```
+
+2. Karta z danych wpisanych ręcznie. Położenie to środek ulicy wyliczony z rekordów RCN (przybliżenie, karta to zaznacza):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py --cena 839000 --metraz 65.08 --ulica "Szurmana"
+```

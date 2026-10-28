@@ -146,13 +146,16 @@ def save_html(url: str, html: str, out_dir: str) -> str:
     return path
 
 
-def format_probe(url: str, status: int, saved: Optional[str], result: Optional[Dict[str, Any]]) -> str:
-    lines = ["Adres: %s" % url, "HTTP %d" % status]
+def format_probe(url: str, status: int, saved: Optional[str], result: Optional[Dict[str, Any]],
+                 from_file: Optional[str] = None) -> str:
+    lines = ["Adres: %s" % url, "Plik: %s" % from_file if from_file else "HTTP %d" % status]
     if status != 200 or result is None:
         lines.append("HTTP %d: portal odmówił lub strony nie ma. Nie ponawiać w pętli; wkleić ten wynik." % status)
         return "\n".join(lines)
     total = len(result["kandydaci"])
-    lines += ["Zapisano: %s" % saved, "Tytuł: %s" % result["tytul"],
+    if not from_file:
+        lines.append("Zapisano: %s" % saved)
+    lines += ["Tytuł: %s" % result["tytul"],
               "Źródła danych: %s" % (", ".join("%s=%d" % kv for kv in sorted(result["zrodla"].items())) or "brak"),
               "Błędne bloki JSON: %d" % result["bledne_bloki"],
               "Pola kandydujące (%d z %d):" % (min(total, MAX_CANDIDATES), total)]
@@ -167,12 +170,22 @@ def main(argv=None) -> int:
     probe = sub.add_parser("probe", help="pobierz jedno ogłoszenie i pokaż dane strukturalne")
     probe.add_argument("url")
     probe.add_argument("--out-dir", default=os.path.join("ref", "oferty"))
+    probe.add_argument("--file", help="strona zapisana w przeglądarce (bez pobierania z internetu)")
     args = p.parse_args(argv)
     try:
         url = clean_url(args.url)
     except ValueError as exc:
         print("BŁĄD: %s" % exc, file=sys.stderr)
         return 2
+    if args.file:
+        try:
+            with open(args.file, encoding="utf-8", errors="replace") as f:
+                html = f.read()
+        except OSError:
+            print("BŁĄD: nie ma pliku %s" % args.file, file=sys.stderr)
+            return 2
+        print(format_probe(url, 200, None, extract_structured(html), from_file=args.file))
+        return 0
     try:
         status, html = fetch(url)
     except (urllib.error.URLError, OSError) as exc:
