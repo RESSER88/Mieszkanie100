@@ -79,10 +79,34 @@ Obserwacje do wyjaśnienia:
 - Skok liczby rekordów z 1548 (2020) do 5409 (2021). Może odzwierciedlać rynek albo zmianę zakresu lub sposobu wprowadzania danych do rejestru. Nie wiadomo, bez sprawdzenia rozkładu miesięcznego.
 - Migawka deweloperuch (2157 transakcji, 2338 lokali, wrzesień 2024 – wrzesień 2025) ma wyraźnie mniej lokali niż WFS w podobnym okresie (2024: 6740, 2025: 4698 rekordów w całych latach). Migawka jest więc najpewniej niepełna i nie nadaje się jako liczba referencyjna dla kompletności. Dokładne porównanie wymaga zliczenia WFS w tym samym oknie dat.
 
+### Kontrola kompletności względem oficjalnego eksportu (2026-10-28)
+
+- Plik GeoPackage istnieje: `https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/GPKG/2469_transakcje_ceny.gpkg.zip` (HTTP 200, 49 558 121 bajtów, pobranie trwa około 80 s po 28 s oczekiwania na start). Zawiera tabele `transakcje_lokale`, `transakcje_budynki`, `transakcje_dzialki` z tymi samymi nazwami pól co WFS, małymi literami (m.in. `gid`, `tran_lokalny_id_iip`, `dok_data`, `lok_pow_uzyt`, `lok_cena_brutto`, `lok_liczba_izb`, `lok_inf`, `tran_rodzaj_rynku`).
+- `transakcje_lokale`: 41 847 rekordów. Import WFS: 41 845. Różnica 2 rekordy (0,005%). To zgodność w granicach tolerancji z niezależnym oficjalnym eksportem, nie dowód pełnej zgodności. Które 2 rekordy się różnią, nie zostało jeszcze sprawdzone (oba źródła mają ten sam klucz `gid`).
+- Migawka deweloperuch jest niepełna: w oknie 2024-09-01 .. 2025-09-01 WFS ma 5441 lokali, migawka 2338 (około 43%). Nie używać jej jako źródła cen ani liczby referencyjnej.
+
+### mScanner (publiczne API, bez klucza, 2026-10-28)
+
+- Adres bazowy `https://api.mscanner.pl/api`. Katowice: `gmina-246901`. Parametry: `mode` (`transactional` lub `asking`), `propertyType` (`apartment`, `house`, `plot`, `other`), `segment` (`all`, `primary`, `secondary`, w niektórych `mixed` i `not_applicable`), `level` (`dzielnica`, `osiedle`), `periodFrom`, `periodTo`.
+- Dla Katowic (`mode=transactional`): 41 298 rekordów RCN, okres 2012-08-23 .. 2026-10-02, aktualność 2026-10-08. Znane braki według mScanner: brak współrzędnych geograficznych (tylko precyzja adresowa) i data dokumentu to nie pewna data transakcji.
+- Zapytanie `district-breakdown` z `level=osiedle` zwróciło poziom `dzielnica` (22 dzielnice), czyli osiedli dla Katowic brak. Ligota-Panewniki: 2801 rekordów, mediana 6461 zł/m².
+- Uwaga: bez `periodFrom` i `periodTo` agregaty obejmują cały okres od 2012 roku (w odpowiedzi `periodFrom` i `periodTo` mają wartość `null`), więc mediany mieszają ceny z 14 lat i nie nadają się do oceny dzisiejszych cen. Zawsze podawać okres.
+- Zasady korzystania z ich opisu: nigdy liczby bez próby i okresu, brak danych to nie niska cena, ceny transakcyjne i ofertowe to dwie różne rzeczy. Cytować blok `attribution`: „mScanner (dane: Rejestr Cen Nieruchomości), https://mscanner.pl".
+- Nie sprawdzone: `mode=asking` dla Katowic (ceny ofertowe nowych mieszkań), tzn. czy jest pokrycie.
+
+### Czy mamy wszystko, żeby korzystać z cen sprzedanych i nowych nieruchomości
+
+Ceny sprzedanych (transakcyjne): tak, na poziomie pojedynczych transakcji z cenami, powierzchnią, liczbą pokoi, rynkiem pierwotnym lub wtórnym, adresem i współrzędnymi. Ograniczenia: brak roku budowy (kryterium do 10 lat wymaga innego źródła), brak pola o ogrodzie lub tarasie (tylko tekst w `lok_inf`), cena za m² tylko dla około 70% rekordów, data dokumentu zamiast pewnej daty transakcji.
+
+Nowe nieruchomości: rynek pierwotny jest w RCN (`tran_rodzaj_rynku`), ale to ceny sprzedaży, a nie oferty. Ceny ofertowe nowych mieszkań (`mode=asking` w mScanner) nie zostały sprawdzone. Pojedyncze ogłoszenia nie są dostępne w żadnym z poznanych źródeł.
+
+Brak źródeł: szkoły i przedszkola, komunikacja, plan miejscowy, planowane inwestycje.
+
 Otwarte pytania:
 
-- Niezależne źródło liczby referencyjnej (plik GeoPackage dla powiatu 2469). Adres pliku (`curl -I`) nadal niesprawdzony.
+- Które 2 rekordy różnią WFS i GeoPackage.
 - Test warstw `budynki` i `dzialki` (identyfikatory obiektów zgadnięte).
+- Pokrycie `mode=asking` dla Katowic.
 
 ## Test akceptacyjny
 
