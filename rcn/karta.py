@@ -86,6 +86,8 @@ def format_card(card: Dict[str, Any]) -> str:
                                             ", " + o["dzielnica"] if o.get("dzielnica") else "",
                                             o.get("rok_budowy") or "nieznany"),
     ]
+    if o.get("inwestycja"):
+        lines.append("Inwestycja: %s" % o["inwestycja"])
     if o.get("wzmianki"):
         mentions = ", ".join("%s%s" % (k, "" if v is True else " %g m²" % v if isinstance(v, float) else " %s" % v)
                              for k, v in o["wzmianki"].items())

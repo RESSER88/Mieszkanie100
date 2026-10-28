@@ -213,3 +213,13 @@ Karta dla oferty z OLX (z zapamiętanych wyników, bez pobierania strony ogłosz
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "LINK_DO_OFERTY_OLX_Z_WYNIKU_SZUKANIA"
 ```
+
+## Otodom (2026-10-28)
+
+Odczyt ogłoszeń Otodom w `rcn/portale.py` napisany na podstawie pól używanych przez `ncola/otodom_scraper` (projekt dla Katowic i śląskiego, 2026-07): `props.pageProps.ad` w `__NEXT_DATA__`, w tym `target.Price`, `Price_per_m`, `Area`, `Rooms_num`, `Floor_no`, `Build_year`, `market`, ulica, dzielnica z `reverseGeocoding`, nazwa inwestycji `developmentTitle` i lista cech `Extras_types` (balkon, ogród, taras, garaż). Tamten projekt podszywa się pod przeglądarkę; my najpierw sprawdzamy, czy Otodom odpowiada na uczciwy identyfikator. Nie sprawdzone na prawdziwej stronie.
+
+Jedno zapytanie testowe (strona wyników dla Katowic):
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && python3 rcn/oferta.py probe "https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/katowice/katowice/katowice" | head -15
+```

@@ -173,6 +173,8 @@ def _portal_and_id(url: str):
         portal = "nieruchomosci-online"
     elif host.endswith("gratka.pl"):
         portal = "gratka"
+    elif host.endswith("otodom.pl"):
+        portal = "otodom"
     else:
         portal = host
     numbers = re.findall(r"\d{5,}", parts.path)
@@ -184,7 +186,7 @@ def _empty_offer(url: str) -> Dict[str, Any]:
     return {"portal": portal, "id": oid, "url": url, "tytul": None, "cena": None, "powierzchnia_m2": None,
             "cena_m2": None, "pokoje": None, "pietro": None, "rok_budowy": None, "rynek": None, "ulica": None,
             "miejscowosc": None, "dzielnica": None, "lat": None, "lon": None, "lokalizacja_przyblizona": False,
-            "wzmianki": {}, "wzmianki_zrodlo": None, "brakuje": []}
+            "wzmianki": {}, "wzmianki_zrodlo": None, "inwestycja": None, "brakuje": []}
 
 
 def _from_json_ld(offer: Dict[str, Any], blocks: Iterable[Any]) -> Optional[str]:
@@ -254,6 +256,57 @@ def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]
     return description if isinstance(description, str) else None
 
 
+_OTODOM_EXTRAS = {"balcony": "balkon", "garden": "ogrod", "terrace": "taras", "garage": "miejsce_postojowe",
+                  "loggia": "loggia"}
+
+
+def _first(value: Any) -> Any:
+    return value[0] if isinstance(value, list) and value else value
+
+
+def otodom_floor(value: Any) -> Optional[int]:
+    """Otodom floor codes: "ground_floor" -> 0, "floor_4" -> 4, "floor_higher_10" -> 10."""
+    value = _first(value)
+    if not value:
+        return None
+    if str(value) == "ground_floor":
+        return 0
+    match = re.search(r"\d+", str(value))
+    return int(match.group()) if match else None
+
+
+def _from_otodom(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]:
+    ad = (((blocks.get("next_data") or {}).get("props") or {}).get("pageProps") or {}).get("ad")
+    if not isinstance(ad, dict):
+        return None
+    target = ad.get("target") or {}
+    offer["id"] = str(ad["id"]) if ad.get("id") is not None else offer["id"]
+    offer["tytul"] = html_to_text(ad["title"]) if isinstance(ad.get("title"), str) else None
+    offer["cena"] = to_number(target.get("Price"))
+    offer["cena_m2"] = to_number(target.get("Price_per_m"))
+    offer["powierzchnia_m2"] = to_number(target.get("Area"))
+    offer["pokoje"] = _to_int(_first(target.get("Rooms_num")))
+    offer["pietro"] = otodom_floor(target.get("Floor_no"))
+    offer["rok_budowy"] = _to_int(target.get("Build_year"))
+    offer["rynek"] = _market(ad.get("market"))
+    offer["zabudowa"] = _first(target.get("Building_type"))
+    offer["inwestycja"] = ad.get("developmentTitle") or None
+    location = ad.get("location") or {}
+    address = location.get("address") or {}
+    offer["ulica"] = (address.get("street") or {}).get("name")
+    city = (address.get("city") or {}).get("name") or target.get("City")
+    offer["miejscowosc"] = city.capitalize() if isinstance(city, str) and city.islower() else city
+    for place in (location.get("reverseGeocoding") or {}).get("locations") or []:
+        if place.get("locationLevel") == "district":
+            offer["dzielnica"] = place.get("name")
+    offer["lat"] = to_number(_find_key(location, r"latitude|lat"))
+    offer["lon"] = to_number(_find_key(location, r"longitude|lon|lng"))
+    extras = target.get("Extras_types") or []
+    offer["_cechy"] = {_OTODOM_EXTRAS[e]: True for e in extras if e in _OTODOM_EXTRAS}
+    description = ad.get("description")
+    return html_to_text(description) if isinstance(description, str) else None
+
+
 def parse_listing(html: str, url: str) -> Dict[str, Any]:
     """One normalised offer from a saved listing page; `brakuje` lists what could not be read."""
     offer = _empty_offer(url)
@@ -273,6 +326,8 @@ def parse_listing(html: str, url: str) -> Dict[str, Any]:
     description = None
     if offer["portal"] == "gratka":
         description = _from_gratka(offer, other)
+    elif offer["portal"] == "otodom":
+        description = _from_otodom(offer, other)
     if offer["cena"] is None and offer["powierzchnia_m2"] is None:
         description = _from_json_ld(offer, ld_blocks)
     offer["tytul"] = offer["tytul"] or meta.get("og:title") or " ".join(parser.title.split()) or None
@@ -283,6 +338,10 @@ def parse_listing(html: str, url: str) -> Dict[str, Any]:
     # Mentions come from the listing's own description; the whole page also holds recommended listings.
     offer["wzmianki"] = features_from_text(description or text)
     offer["wzmianki_zrodlo"] = "opis" if description else "cała strona"
+    extras = offer.pop("_cechy", None)
+    if extras:   # structured features from the listing; an area found in the description wins
+        offer["wzmianki"] = dict(extras, **offer["wzmianki"])
+        offer["wzmianki_zrodlo"] = "opis i cechy ogłoszenia"
     if offer["rok_budowy"] is None and "rok" in offer["wzmianki"]:
         offer["rok_budowy"] = offer["wzmianki"]["rok"]
     offer["brakuje"] = [f for f in REQUIRED if (f == "wspolrzedne" and (offer["lat"] is None or offer["lon"] is None))

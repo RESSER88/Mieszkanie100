@@ -174,5 +174,58 @@ class FeatureAndHelperTests(unittest.TestCase):
         self.assertIn("wspolrzedne", offer["brakuje"])
 
 
+
+# Otodom listing page: props.pageProps.ad, field names as used by ncola/otodom_scraper (2026-07).
+OD_URL = "https://www.otodom.pl/pl/oferta/4-pokoje-z-ogrodem-ligota-ID4abcD"
+OD_AD = {
+    "id": 66554433, "title": "4 pokoje z ogrodem, Ligota", "market": "SECONDARY", "slug": "4-pokoje-z-ogrodem-ligota-ID4abcD",
+    "description": "<p>Mieszkanie na parterze z ogrodem 80 m² i tarasem. Kontakt 600 222 333.</p>",
+    "developmentTitle": "Osiedle Franciszkańskie V",
+    "target": {"Price": 1290000, "Price_per_m": 10750, "Area": "120", "Rooms_num": ["4"], "Floor_no": ["ground_floor"],
+               "Build_year": "2021", "Building_type": ["block"], "City": "katowice",
+               "Extras_types": ["balcony", "garden", "terrace", "garage"]},
+    "location": {"address": {"street": {"name": "ul. Biskupa Tadeusza Szurmana"}, "city": {"name": "Katowice"}},
+                 "coordinates": {"latitude": 50.2318, "longitude": 18.9681},
+                 "reverseGeocoding": {"locations": [{"locationLevel": "city", "name": "Katowice"},
+                                                    {"locationLevel": "district", "name": "Ligota-Panewniki"}]}},
+    "owner": {"id": 1, "name": "Anna Właścicielka"}, "agency": {"id": 2, "name": "Biuro Nieruchomości XYZ"},
+}
+OD_HTML = ('<html><head><title>4 pokoje | Otodom</title><script id="__NEXT_DATA__" type="application/json">%s'
+           '</script></head><body>Polecane: kawalerka z ogródkiem 300 m²</body></html>'
+           % json.dumps({"props": {"pageProps": {"ad": OD_AD}}}, ensure_ascii=False))
+
+
+class OtodomTests(unittest.TestCase):
+    def setUp(self):
+        self.offer = pt.parse_listing(OD_HTML, OD_URL)
+
+    def test_fields(self):
+        o = self.offer
+        self.assertEqual((o["portal"], o["id"]), ("otodom", "66554433"))
+        self.assertEqual((o["cena"], o["powierzchnia_m2"], o["cena_m2"], o["pokoje"], o["pietro"], o["rok_budowy"]),
+                         (1290000.0, 120.0, 10750.0, 4, 0, 2021))
+        self.assertEqual((o["rynek"], o["ulica"], o["miejscowosc"], o["dzielnica"]),
+                         ("wtorny", "ul. Biskupa Tadeusza Szurmana", "Katowice", "Ligota-Panewniki"))
+        self.assertEqual((o["lat"], o["lon"]), (50.2318, 18.9681))
+        self.assertEqual(o["inwestycja"], "Osiedle Franciszkańskie V")
+        self.assertEqual(o["brakuje"], [])
+
+    def test_features_from_listing_extras_and_description(self):
+        w = self.offer["wzmianki"]
+        self.assertEqual((w["ogrod"], w["taras"], w["balkon"], w["miejsce_postojowe"]), (80.0, True, True, True))
+        self.assertEqual(self.offer["wzmianki_zrodlo"], "opis i cechy ogłoszenia")
+
+    def test_floor_numbers(self):
+        self.assertEqual(pt.otodom_floor(["floor_4"]), 4)
+        self.assertEqual(pt.otodom_floor("ground_floor"), 0)
+        self.assertEqual(pt.otodom_floor(["floor_higher_10"]), 10)
+        self.assertIsNone(pt.otodom_floor(None))
+
+    def test_no_owner_or_agency_data(self):
+        text = json.dumps(self.offer, ensure_ascii=False)
+        for secret in ("Właścicielka", "Biuro Nieruchomości XYZ", "600 222 333"):
+            self.assertNotIn(secret, text)
+
+
 if __name__ == "__main__":
     unittest.main()
