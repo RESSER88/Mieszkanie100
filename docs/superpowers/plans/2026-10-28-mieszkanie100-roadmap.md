@@ -118,6 +118,19 @@ Zakres podany przez użytkownika: drogi w budowie i w planach w promieniu 3 km o
 - **Stan źródeł:** w opisie tej funkcji u mScanner dane o planowanych drogach są „chwilowo niedostępne" (wg wklejonego tekstu), więc nie zakładamy, że gotowe źródło istnieje. Plany drogowe miejskie (np. zarządca dróg Katowic, plan miejscowy, studium) to osobne źródła, jeszcze nierozpoznane.
 - **Zasada prezentacji:** każdą pozycję oznaczamy „OSM, orientacyjnie" albo „GDDKiA, oficjalnie". Rok otwarcia podajemy tylko, gdy jest w źródle. Brak roku to „rok nieznany", nie zgadujemy.
 
+### Blok C: ukształtowanie terenu (pytanie użytkownika, 2026-10-28)
+
+Pomysł: do karty lokalizacji dodać wysokość n.p.m. punktu oraz proste wskaźniki rzeźby terenu w otoczeniu (nachylenie w promieniu około 100 m, położenie względem okolicy: wzniesienie, zbocze lub obniżenie). Wskaźnik pomocniczy, nie ocena i nie analiza ryzyka powodziowego.
+
+| Źródło | Co wiadomo (z pamięci i opisu użytkownika, niezweryfikowane ze środowiska chmurowego) | Za | Przeciw |
+|---|---|---|---|
+| Open-Meteo Elevation API (`https://api.open-meteo.com/v1/elevation`) | Wysokość dla podanych współrzędnych geograficznych, według dokumentacji oparta na globalnym modelu terenu o rozdzielczości około 90 m. Bez klucza, z limitami dziennymi i ograniczeniem do użytku niekomercyjnego. | Proste, jedno zapytanie, dobre do szybkiego testu. | Rozdzielczość około 90 m jest zgrubna dla jednej działki lub budynku. Wymaga współrzędnych WGS84, a nasze są w EPSG:2180, więc potrzebne jest przeliczenie. Zapytania zewnętrzne dla każdej nieruchomości (buforujemy wyniki). |
+| GUGiK, Numeryczny Model Terenu (NMT) | Oficjalny model terenu dla Polski o znacznie większej rozdzielczości, dostępny przez geoportal (pliki do pobrania oraz usługi). Dokładny adres usługi punktowej i warunki licencji nie zostały sprawdzone. | Dokładniejszy. Prawdopodobnie przyjmuje współrzędne w EPSG:2180, więc bez przeliczania. Spójny z resztą danych GUGiK. | Usługa i format niesprawdzone. Duże pliki, jeśli pobierać siatkę zamiast pojedynczych punktów. |
+
+Rekomendacja: sprawdzić najpierw usługę punktową NMT z GUGiK na Raspberry Pi, bo pasuje do naszego układu współrzędnych i jest dokładniejsza. Open-Meteo zostaje planem zapasowym lub szybkim testem. Wybór zapada po spike'u na Raspberry Pi: wysokość dla 10 znanych punktów w Katowicach porównana z tym, co użytkownik wie o terenie.
+
+Zadania: spike obu źródeł na kilku punktach (wynik w `docs/`), moduł pobierania wysokości z buforem w SQLite (ten sam punkt nie jest pytany dwa razy), wskaźnik nachylenia z kilku punktów wokół, prezentacja na karcie z oznaczeniem źródła i rozdzielczości.
+
 ### Zadania
 
 1. Spike na Raspberry Pi: z pliku PBF śląskiego wyfiltrować obiekty z bloku A i B, policzyć je w promieniu 3 km od ul. Braci Mniejszych, obejrzeć wyniki z użytkownikiem.
