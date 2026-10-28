@@ -173,6 +173,15 @@ Użytkownik chce użyć darmowej wersji Mapbox (repozytorium `mapbox/mapbox-agen
 3. Spike na Raspberry Pi: pobrać wycinek OSM dla woj. śląskiego, policzyć przedszkola i szkoły w promieniu 1 km od ul. Braci Mniejszych i porównać z tym, co użytkownik wie o okolicy.
 4. Dopiero potem wybrać Mapbox GL JS lub MapLibre dla mapy transakcji.
 
+## OLX i Otodom: rozpoznanie istniejących projektów (2026-10-28)
+
+Strona ogłoszenia OLX odpowiada naszemu narzędziu HTTP 403. Nie obchodzimy tej blokady. Przejrzane projekty open source:
+
+- `DEENUU1/property-aggregator` (ostatnia zmiana 2024-06): OLX przez JSON `https://www.olx.pl/api/v1/offers/?offset=0&limit=40&category_id=14` (pola `params`: `price`, `m`, `price_per_m`, `rooms`, `floor_select`, `builttype`; `location.city.name`, `location.region.name`). Otodom przez strony wyników z klasami CSS z 2024 roku i podszywanie się pod przeglądarkę, cała Polska. Architektura (FastAPI, Postgres, MongoDB, Celery) za ciężka na Raspberry Pi. Otodom stamtąd nie bierzemy.
+- `kromylodd/Polish-Housing-Market-Intelligence-Platform` (aktywny do 2026-08): OLX przez GraphQL `https://www.olx.pl/apigateway/graphql`, zapytanie `ListingSearchQuery` (`clientCompatibleListings`), pola `id`, `url`, `title`, `created_time`, `location.city.name`, `location.district.name`, `map.lat`, `map.lon`, `params` (`GenericParam` z `key` i `label`, `PriceParam` z `value`). Katowice: `city_id=7691`, `region_id=6`. Kategoria 14 to sprzedaż mieszkań, 15 wynajem. 40 ofert na stronę. Zasady autora: tylko wyniki wyszukiwania (bez stron ogłoszeń), globalny limit tempa 1,5–3 s, najwyżej 4 zapytania naraz, ponawianie z rosnącym opóźnieniem. Autor przedstawia się jako przeglądarka Chrome; my używamy uczciwego identyfikatora.
+
+Propozycja (do decyzji użytkownika, ryzyko regulaminu OLX dla nieoficjalnego API): pozycja 10 kolejki „przeglądanie ogłoszeń z rynku wtórnego" przez wyszukiwanie GraphQL dla Katowic raz dziennie, z filtrem dzielnicy i metrażu po naszej stronie, z przerwą kilku sekund między stronami i jednym zapytaniem naraz. Każda oferta ma współrzędne, więc od razu dostaje kartę. Pierwszy krok: jedno zapytanie testowe z Raspberry Pi (czy API odpowiada na nasz identyfikator).
+
 ## Decyzje, które musi podjąć użytkownik
 
 1. Zakres typu nieruchomości: tylko mieszkania, czy także domy i segmenty z ogrodem (warstwa `budynki`). Ma wpływ na etap 1 i 2.
