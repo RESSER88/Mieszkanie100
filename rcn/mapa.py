@@ -26,10 +26,18 @@ PORTALS = ("otodom.pl", "olx.pl", "gratka.pl", "nieruchomosci-online.pl", "moriz
            "adresowo.pl", "rynekpierwotny.pl")
 MAP_OSM_RADIUS_M = 1000.0      # every object this close is drawn
 MAP_OSM_PER_CATEGORY = 40      # at most this many per category inside MAP_OSM_RADIUS_M
+# Big nuisances are drawn whole up to the surroundings radius (3 km): OSM cuts a line into many short
+# ways, so drawing only the nearest one left most of a power line or a railway off the map.
+FULL_RADIUS = {"linia_najwyzsza", "linia_wn", "stacja_energetyczna", "kolej", "droga_glowna", "lotnisko",
+               "droga_w_budowie", "droga_planowana"}
+FULL_RADIUS_CAP = 600          # ways per category, a guard for dense road networks
+SIMPLIFY_M = 3.0               # shapes are simplified to this tolerance before sending to the phone
 MARKET_TEXT = {"rynekWtorny": "wtórny", "rynekPierwotny": "pierwotny"}
 # Groups for the page and the map legend: what to avoid, roads that will change, what a family uses daily.
 GROUPS = {"linia_wn": "uciazliwosci", "linia_inna": "uciazliwosci", "stacja_energetyczna": "uciazliwosci",
           "maszt": "uciazliwosci", "kolej": "uciazliwosci", "droga_glowna": "uciazliwosci", "przemysl": "uciazliwosci",
+          "linia_najwyzsza": "uciazliwosci", "tramwaj": "uciazliwosci", "lotnisko": "uciazliwosci",
+          "droga_drugorzedna": "uciazliwosci",
           "skladowisko": "uciazliwosci", "oczyszczalnia": "uciazliwosci", "kamieniolom": "uciazliwosci",
           "droga_w_budowie": "drogi", "droga_planowana": "drogi",
           "przedszkole": "na_co_dzien", "szkola": "na_co_dzien", "przystanek": "na_co_dzien"}
@@ -60,26 +68,50 @@ def _latlon(y: float, x: float) -> List[float]:
     return [round(lat, 6), round(lon, 6)]
 
 
+def simplify(points: List[List[float]], tol: float = SIMPLIFY_M) -> List[List[float]]:
+    """Douglas-Peucker on planar EPSG:2180 points; keeps both ends, drops vertices closer than tol to the line."""
+    if len(points) < 3:
+        return list(points)
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        a, b = stack.pop()
+        best, index = -1.0, None
+        for i in range(a + 1, b):
+            d = otoczenie.point_segment_distance(points[i], points[a], points[b])
+            if d > best:
+                best, index = d, i
+        if index is not None and best > tol:
+            keep[index] = True
+            stack += [(a, index), (index, b)]
+    return [p for p, k in zip(points, keep) if k]
+
+
 def _geojson(gtype: str, coords) -> Dict[str, Any]:
     def conv(c):
         if isinstance(c[0], (int, float)):
             lat, lon = otoczenie.pl1992_to_wgs84(c[0], c[1])
             return [round(lon, 6), round(lat, 6)]
+        if c and isinstance(c[0][0], (int, float)):          # a line or a ring
+            return [conv(p) for p in simplify(c)]
         return [conv(p) for p in c]
     return {"type": gtype, "coordinates": conv(coords)}
 
 
 def _osm_for_map(items: List[dict]) -> List[dict]:
-    """Everything within MAP_OSM_RADIUS_M (capped per category) plus the nearest object of each category."""
+    """Big nuisances whole up to the surroundings radius; the rest within MAP_OSM_RADIUS_M; nearest of each always."""
     chosen, per_category = [], {}
     for item in items:                       # nearest first
         n = per_category.get(item["kategoria"], 0)
-        if n == 0 or (item["odleglosc_m"] <= MAP_OSM_RADIUS_M and n < MAP_OSM_PER_CATEGORY):
+        full = item["kategoria"] in FULL_RADIUS and n < FULL_RADIUS_CAP
+        if n == 0 or full or (item["odleglosc_m"] <= MAP_OSM_RADIUS_M and n < MAP_OSM_PER_CATEGORY):
             per_category[item["kategoria"]] = n + 1
             chosen.append({"kategoria": item["kategoria"], "grupa": GROUPS.get(item["kategoria"], "uciazliwosci"),
                            "etykieta": otoczenie.LABELS[item["kategoria"]],
                            "nazwa": item["nazwa"], "odleglosc_m": round(item["odleglosc_m"]),
-                           "szczegoly": item["szczegoly"], "geojson": _geojson(item["typ_geometrii"], item["geometria"])})
+                           "szczegoly": item["szczegoly"], "pse": "sieć przesyłowa PSE" in (item["szczegoly"] or ""),
+                           "geojson": _geojson(item["typ_geometrii"], item["geometria"])})
     return chosen
 
 

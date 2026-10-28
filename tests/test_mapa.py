@@ -103,6 +103,30 @@ class CardJsonTests(unittest.TestCase):
                                                    "promien": "99999"})[0], 400)
 
 
+class MapSelectionTests(unittest.TestCase):
+    def item(self, cat, dist, gtype="LineString", coords=None):
+        return {"kategoria": cat, "nazwa": None, "odleglosc_m": dist, "szczegoly": "", "typ_geometrii": gtype,
+                "geometria": coords or [(250000.0, 500000.0), (250000.0, 500100.0)]}
+
+    def test_power_line_drawn_whole_to_3_km_school_only_nearest(self):
+        items = [self.item("linia_wn", 1500 + i) for i in range(30)]
+        items += [self.item("szkola", 1500 + i, "Point", (250000.0, 500000.0)) for i in range(30)]
+        chosen = mapa._osm_for_map(items)
+        self.assertEqual(sum(1 for c in chosen if c["kategoria"] == "linia_wn"), 30)
+        self.assertEqual(sum(1 for c in chosen if c["kategoria"] == "szkola"), 1)
+
+    def test_simplify_drops_points_on_a_straight_line_keeps_corners(self):
+        line = [(0.0, float(x)) for x in range(0, 101, 5)] + [(50.0, 100.0)]
+        self.assertEqual(mapa.simplify(line), [(0.0, 0.0), (0.0, 100.0), (50.0, 100.0)])
+        wiggle = [(0.0, 0.0), (1.0, 50.0), (0.0, 100.0)]                 # 1 m off: below the tolerance
+        self.assertEqual(len(mapa.simplify(wiggle)), 2)
+
+    def test_pse_flag_for_the_page(self):
+        item = self.item("linia_najwyzsza", 800)
+        item["szczegoly"] = "napięcie 400 kV, sieć przesyłowa PSE (wg tagu operatora w OSM)"
+        self.assertTrue(mapa._osm_for_map([item])[0]["pse"])
+
+
 class ServerTests(unittest.TestCase):
     def test_page_and_api_over_http(self):
         with tempfile.TemporaryDirectory() as d:

@@ -94,7 +94,7 @@ mkdir -p /mnt/nas/projects/mieszkanie100/ref/osm && cd /mnt/nas/projects/mieszka
 3. Wyfiltrowanie potrzebnych obiektów i zapis do GeoJSON:
 
 ```bash
-cd /mnt/nas/projects/mieszkanie100/ref/osm && osmium tags-filter slaskie-latest.osm.pbf nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link w/railway=rail nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant nwr/landuse=industrial,landfill,quarry -o otoczenie-slask.osm.pbf --overwrite && osmium export otoczenie-slask.osm.pbf -f geojsonseq --add-unique-id=type_id -o otoczenie-slask.geojsonseq --overwrite && ls -l
+cd /mnt/nas/projects/mieszkanie100/ref/osm && osmium tags-filter slaskie-latest.osm.pbf nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link,secondary,secondary_link w/railway=rail,tram nwr/aeroway=aerodrome nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant nwr/landuse=industrial,landfill,quarry -o otoczenie-slask.osm.pbf --overwrite && osmium export otoczenie-slask.osm.pbf -f geojsonseq --add-unique-id=type_id -o otoczenie-slask.geojsonseq --overwrite && ls -l
 ```
 
 4. Wczytanie do bazy i raport dla ul. Braci Mniejszych w promieniu 3 km:
@@ -306,4 +306,15 @@ Opis decyzji: `docs/superpowers/specs/2026-10-28-mapa-wyglad.md`. Sprawdzone w c
 
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && git pull && python3 rcn/olx.py szukaj && python3 rcn/otodom.py szukaj --metraz-od 50 && python3 rcn/mapa.py
+```
+
+## Uciążliwości na mapie: pełne linie, wzory, wyróżnianie (2026-10-28)
+
+- Przyczyny zgłoszonego problemu („nie wszystko jest oznaczone”): mapa rysowała wszystkie obiekty tylko do 1 km, a dalej tylko najbliższy odcinek każdego rodzaju (OSM tnie linie na wiele odcinków); wszystkie uciążliwości miały jeden kolor; filtr `osmium` nie brał lotnisk, tramwajów i dróg drugorzędnych.
+- Poprawki: linie 110 kV i 220–400 kV, stacje, kolej, drogi główne, lotniska oraz drogi w budowie i planowane rysowane w całości do 3 km (kształty upraszczane do 3 m, żeby telefon nie zwolnił); każdy rodzaj ma własny wzór linii (legenda pokazuje te same wzory); kliknięcie wiersza w części „Otoczenie” wyróżnia ten rodzaj na mapie i przygasza resztę.
+- Nowe rodzaje: linia najwyższego napięcia 220–400 kV (z dopiskiem „sieć przesyłowa PSE”, gdy operator w OSM to PSE lub `operator:wikidata=Q1749435`), torowisko tramwajowe, lotnisko lub lądowisko, droga drugorzędna (zwykle wojewódzka). Słupów (`power=tower`) celowo nie bierzemy: linie przez nie przechodzą, a tysiące punktów spowolniłyby telefon.
+- Na Pi trzeba ponownie przefiltrować plik PBF i wczytać bazę OSM (polecenie w kroku 3 sekcji o OpenStreetMap, już z nowymi tagami), potem uruchomić mapę od nowa:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git pull && cd ref/osm && osmium tags-filter slaskie-latest.osm.pbf nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link,secondary,secondary_link w/railway=rail,tram nwr/aeroway=aerodrome nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant nwr/landuse=industrial,landfill,quarry -o otoczenie-slask.osm.pbf --overwrite && osmium export otoczenie-slask.osm.pbf -f geojsonseq --add-unique-id=type_id -o otoczenie-slask.geojsonseq --overwrite && cd ../.. && python3 rcn/otoczenie.py import --geojsonseq ref/osm/otoczenie-slask.geojsonseq --osm-db osm_slask.sqlite && python3 rcn/mapa.py
 ```

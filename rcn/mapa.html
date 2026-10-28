@@ -140,6 +140,10 @@
   td small { display: block; color: var(--muted); font-size: 12px; }
   .rank { display: inline-grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--ink);
           font-size: 11px; font-weight: 700; background: var(--surface); }
+  svg.swatch { vertical-align: -1px; margin-right: 6px; flex: none; }
+  tbody tr[data-cat] { cursor: pointer; }
+  tbody tr[data-cat]:hover td { background: var(--ground); }
+  tbody tr[data-cat].on td { background: var(--band); font-weight: 600; }
   .sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--nuisance); vertical-align: middle;
         margin-right: 6px; }
   .sw.drogi { border-top: 3px dashed var(--road); }
@@ -242,6 +246,42 @@ const m2 = v => v == null ? "–" : (+v).toLocaleString("pl-PL", {maximumFractio
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const POS = {"poniżej typowego zakresu": "--cheap", "w typowym zakresie": "--typical", "powyżej typowego zakresu": "--dear"};
 const GROUP_NAMES = {uciazliwosci: "Uciążliwości", drogi: "Drogi w budowie i planowane", na_co_dzien: "Na co dzień"};
+// One line pattern per kind of object, so a power line, a railway and a main road differ without extra hues.
+// ink: CSS colour token; w: width; dash: SVG dash pattern; casing: a lighter band under the line; area: polygon look.
+const STYLE = {
+  linia_najwyzsza: {ink: "--nuisance", w: 5, dash: "14 4 3 4", casing: true},
+  linia_wn: {ink: "--nuisance", w: 3.5, dash: "10 4 2 4", casing: true},
+  linia_inna: {ink: "--nuisance", w: 1.5, dash: "2 4", op: .6},
+  stacja_energetyczna: {ink: "--nuisance", w: 2.5, fill: .35},
+  maszt: {ink: "--nuisance", w: 2, fill: .5},
+  kolej: {ink: "--nuisance", w: 5, rail: true},
+  tramwaj: {ink: "--nuisance", w: 2, dash: "4 3", op: .8},
+  lotnisko: {ink: "--nuisance", w: 2, dash: "6 3", fill: .1},
+  droga_glowna: {ink: "--nuisance", w: 7, op: .4},
+  droga_drugorzedna: {ink: "--nuisance", w: 4, op: .28},
+  przemysl: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .12},
+  skladowisko: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
+  oczyszczalnia: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
+  kamieniolom: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
+  droga_w_budowie: {ink: "--road", w: 4, dash: "8 5"},
+  droga_planowana: {ink: "--road", w: 3, dash: "2 6"},
+  przedszkole: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  szkola: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  przystanek: {ink: "--daily", w: 2, fill: .15, diamond: true},
+};
+const AREAS = new Set(["przemysl", "skladowisko", "oczyszczalnia", "kamieniolom", "lotnisko", "stacja_energetyczna"]);
+function swatch(kat) {
+  const st = STYLE[kat] || STYLE.przemysl;
+  if (st.diamond) return `<svg class="swatch" width="22" height="12" aria-hidden="true"><rect x="7" y="2" width="8" height="8"
+    transform="rotate(45 11 6)" style="fill:var(--surface);stroke:var(${st.ink});stroke-width:2"/></svg>`;
+  if (AREAS.has(kat) || kat === "maszt") return `<svg class="swatch" width="22" height="12" aria-hidden="true"><rect x="2" y="1" width="18" height="10"
+    style="fill:var(${st.ink});fill-opacity:${st.fill || .2};stroke:var(${st.ink});stroke-width:1.5;stroke-dasharray:${st.dash || "none"}"/></svg>`;
+  const w = Math.min(st.w, 6);
+  const under = st.casing ? `<line x1="0" y1="6" x2="22" y2="6" style="stroke:var(--surface);stroke-width:${w + 3}"/>` : "";
+  const rail = st.rail ? `<line x1="0" y1="6" x2="22" y2="6" style="stroke:var(--surface);stroke-width:${w - 2};stroke-dasharray:5 5"/>` : "";
+  return `<svg class="swatch" width="22" height="12" aria-hidden="true">${under}<line x1="0" y1="6" x2="22" y2="6"
+    style="stroke:var(${st.ink});stroke-width:${w};stroke-opacity:${st.op || 1};stroke-dasharray:${st.rail ? "none" : st.dash || "none"}"/>${rail}</svg>`;
+}
 const MARKET = {wtorny: "wtórny", pierwotny: "pierwotny"};
 const SHORT = {"Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)": "Wtórny, budynki do 10 lat"};
 
@@ -250,7 +290,7 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19, attribution: "&copy; autorzy OpenStreetMap (ODbL) | ceny: RCN, GUGiK"
 }).addTo(map);
 const control = L.control.layers(null, null, {collapsed: true}).addTo(map);
-let layers = [], saleMarkers = [], similarMarkers = [];
+let layers = [], saleMarkers = [], similarMarkers = [], catLayers = {}, nearestLayer = {}, lit = null, lastCenter = null;
 
 const legend = L.control({position: "bottomright"});
 legend.onAdd = () => {
@@ -263,8 +303,10 @@ legend.onAdd = () => {
     <span class="key" style="border:3px solid ${css("--ink")}"></span>obwódka: budynek do 10 lat<br>
     <span class="key" style="border:4px solid ${css("--ink")};width:16px;height:16px;vertical-align:-4px"></span>oferta<br>
     <span class="key" style="border-radius:0;border:2px solid ${css("--ink")}"></span>podobna oferta (numer z listy)<br>
-    <span class="sw"></span>uciążliwość<br><span class="sw drogi"></span>droga w budowie lub planowana<br>
-    <span class="sw na_co_dzien"></span>szkoła, przedszkole, przystanek`;
+    ${swatch("linia_najwyzsza")}linia 220–400 kV<br>${swatch("linia_wn")}linia 110 kV<br>
+    ${swatch("kolej")}kolej<br>${swatch("tramwaj")}tramwaj<br>${swatch("droga_glowna")}droga główna<br>
+    ${swatch("przemysl")}przemysł, składowisko, lotnisko<br>${swatch("droga_w_budowie")}droga w budowie<br>
+    ${swatch("droga_planowana")}droga planowana<br>${swatch("szkola")}szkoła, przedszkole, przystanek`;
   L.DomEvent.disableClickPropagation(d);
   return d;
 };
@@ -303,18 +345,30 @@ function drawMap(d) {
                 ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>`));
   if (similarMarkers.length) overlay(L.layerGroup(similarMarkers), "Podobne oferty");
   const groups = {};
+  catLayers = {}; nearestLayer = {};
   d.otoczenie.forEach(it => {
-    const g = it.grupa;
-    const color = g === "na_co_dzien" ? css("--daily") : g === "drogi" ? css("--road") : css("--nuisance");
-    const layer = L.geoJSON(it.geojson, {
-      style: {color, weight: g === "uciazliwosci" ? 2.5 : 3, dashArray: g === "drogi" ? "6 5" : null, fillOpacity: .08},
-      pointToLayer: (f, ll) => g === "na_co_dzien" ? L.marker(ll, {icon: L.divIcon({className: "dia", iconSize: null})})
-                                                   : L.circleMarker(ll, {radius: 5, color, weight: 2, fillOpacity: .3})})
-      .bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty` +
-                 (it.szczegoly ? "<br>" + esc(it.szczegoly) : ""));
-    (groups[g] = groups[g] || L.layerGroup()).addLayer(layer);
+    const g = it.grupa, kat = it.kategoria, st = STYLE[kat] || STYLE.przemysl, color = css(st.ink);
+    const parts = [];
+    const path = {color, weight: st.w, opacity: st.op || 1, dashArray: st.rail ? null : st.dash || null,
+                  fillColor: color, fillOpacity: st.fill || 0, lineCap: "butt"};
+    if (st.casing) parts.push(L.geoJSON(it.geojson, {style: {color: css("--surface"), weight: st.w + 3, opacity: .9},
+                                                    interactive: false}));
+    const main = L.geoJSON(it.geojson, {style: path,
+      pointToLayer: (f, ll) => st.diamond ? L.marker(ll, {icon: L.divIcon({className: "dia", iconSize: null})})
+                                          : L.circleMarker(ll, {radius: 6, color, weight: 2, fillOpacity: .5})});
+    parts.push(main);
+    if (st.rail) parts.push(L.geoJSON(it.geojson, {style: {color: css("--surface"), weight: st.w - 2, dashArray: "8 8",
+                                                          lineCap: "butt"}, interactive: false}));
+    main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty` +
+                   (it.szczegoly ? "<br>" + esc(it.szczegoly) : ""));
+    parts.forEach(p => { p._st = p === main ? path : p.options.style; });
+    const fg = L.featureGroup(parts);
+    (catLayers[kat] = catLayers[kat] || L.featureGroup()).addLayer(fg);
+    if (!nearestLayer[kat]) nearestLayer[kat] = main;
+    (groups[g] = groups[g] || L.layerGroup()).addLayer(fg);
   });
   ["uciazliwosci", "drogi", "na_co_dzien"].forEach(g => groups[g] && overlay(groups[g], GROUP_NAMES[g]));
+  lastCenter = d.srodek; lit = null;
   map.fitBounds(circle.getBounds(), {padding: [24, 24]});
 }
 
@@ -399,16 +453,18 @@ function renderAround(d) {
     const all = d.otoczenie_lista.filter(c => c.grupa === g);
     const found = all.filter(c => c.odleglosc_m != null).sort((a, b) => a.odleglosc_m - b.odleglosc_m);
     const missing = all.filter(c => c.odleglosc_m == null).map(c => esc(c.etykieta));
-    const rows = found.map(c => `<tr>
-        <td><span class="sw ${g}"></span>${esc(c.etykieta)}${c.nazwa || c.szczegoly ?
+    const rows = found.map(c => `<tr data-cat="${esc(c.kategoria)}" title="Pokaż na mapie">
+        <td>${swatch(c.kategoria)}${esc(c.etykieta)}${c.nazwa || c.szczegoly ?
           `<small>${esc([c.nazwa, c.szczegoly].filter(Boolean).join(", "))}</small>` : ""}</td>
         <td class="num">${c.odleglosc_m} m</td></tr>`).join("");
     return `<h3>${GROUP_NAMES[g]}</h3>` + (rows ? `<table><thead><tr><th>Najbliższy obiekt</th><th class="num">Odległość</th></tr></thead>
       <tbody>${rows}</tbody></table>` : "") +
       (missing.length ? `<p class="note">Brak w danych: ${missing.join(", ")}.</p>` : "");
   });
-  $("around").innerHTML = out.join("") + `<p class="note">OpenStreetMap to dane społeczności: brak obiektu w danych
-    nie znaczy, że go nie ma.</p>`;
+  $("around").innerHTML = `<p class="note">Kliknij wiersz, żeby wyróżnić ten rodzaj na mapie.
+    <button type="button" class="linkish" id="show-all" hidden>Pokaż wszystko</button></p>` + out.join("") +
+    `<p class="note">OpenStreetMap to dane społeczności: brak obiektu w danych nie znaczy, że go nie ma.
+     Linie i drogi są rysowane w całości do ${zl(d.promien_otoczenia_m)} m, pozostałe obiekty do 1 km.</p>`;
 }
 
 function renderSales(d) {
@@ -421,7 +477,32 @@ function renderSales(d) {
     <p class="note">${d.transakcje.length} sprzedaży na mapie, tu ${Math.min(12, d.transakcje.length)} najbliższych. Źródło: RCN (akty notarialne).</p>`;
 }
 
+function highlight(kat) {
+  lit = kat;
+  Object.entries(catLayers).forEach(([k, group]) => {
+    const dim = kat && k !== kat;
+    group.eachLayer(fg => fg.eachLayer(part => {
+      part.setStyle(dim ? {opacity: .1, fillOpacity: .02} : part._st);
+      part.eachLayer(l => { if (l.setOpacity) l.setOpacity(dim ? .15 : 1); });
+    }));
+  });
+  document.querySelectorAll("#around tr[data-cat]").forEach(r => r.classList.toggle("on", r.dataset.cat === kat));
+  const all = $("show-all");
+  if (all) all.hidden = !kat;
+  if (!kat) return;
+  catLayers[kat].bringToFront();
+  const n = nearestLayer[kat];
+  if (n) {
+    map.fitBounds(L.latLngBounds([n.getBounds().getCenter(), L.latLng(lastCenter)]).pad(.3), {maxZoom: 16});
+    n.openPopup();
+  }
+  if (window.innerWidth < 1024) $("map").scrollIntoView();
+}
+
 $("panel").addEventListener("click", ev => {
+  if (ev.target.id === "show-all") { highlight(null); return; }
+  const cat = ev.target.closest("tr[data-cat]");
+  if (cat) { highlight(lit === cat.dataset.cat ? null : cat.dataset.cat); return; }
   const row = ev.target.closest("tr[data-i]");
   if (!row || ev.target.closest("a")) return;
   const list = row.dataset.kind === "similar" ? similarMarkers : saleMarkers;

@@ -24,12 +24,16 @@ _K0, _LON0, _E0, _N0 = 0.9993, math.radians(19.0), 500000.0, -5300000.0
 _ECC = 2 * math.sqrt(_N) / (1 + _N)
 
 CATEGORIES = (
-    ("linia_wn", "linia wysokiego napięcia (110 kV i więcej)"),
+    ("linia_najwyzsza", "linia najwyższego napięcia (220–400 kV)"),
+    ("linia_wn", "linia wysokiego napięcia (110 kV)"),
     ("linia_inna", "inna linia energetyczna lub bez napięcia w danych"),
     ("stacja_energetyczna", "stacja energetyczna WN (110 kV i więcej)"),
     ("maszt", "maszt lub wieża telekomunikacyjna"),
     ("kolej", "kolej"),
+    ("tramwaj", "torowisko tramwajowe"),
+    ("lotnisko", "lotnisko lub lądowisko"),
     ("droga_glowna", "droga główna"),
+    ("droga_drugorzedna", "droga drugorzędna (zwykle wojewódzka)"),
     ("przemysl", "teren przemysłowy"),
     ("skladowisko", "składowisko odpadów"),
     ("oczyszczalnia", "oczyszczalnia ścieków"),
@@ -45,7 +49,10 @@ _MAIN_ROADS = {"motorway", "trunk", "primary", "motorway_link", "trunk_link", "p
 _LANDUSE = {"industrial": "przemysl", "landfill": "skladowisko", "quarry": "kamieniolom"}
 # Road classes worth reporting when under construction or planned; footpaths and local streets are noise.
 _ROAD_CLASSES = {"motorway", "trunk", "primary", "secondary", "tertiary"}
-LINEAR = {"linia_wn", "linia_inna", "kolej", "droga_glowna", "droga_w_budowie", "droga_planowana"}
+LINEAR = {"linia_najwyzsza", "linia_wn", "linia_inna", "kolej", "tramwaj", "droga_glowna", "droga_drugorzedna",
+          "droga_w_budowie", "droga_planowana"}
+_SECONDARY = {"secondary", "secondary_link"}
+PSE_WIKIDATA = "Q1749435"    # Polskie Sieci Elektroenergetyczne, the transmission system operator
 
 
 def wgs84_to_pl1992(lat: float, lon: float) -> Tuple[float, float]:
@@ -102,11 +109,19 @@ def classify(tags: Dict[str, str]) -> Optional[str]:
         return "droga_w_budowie" if highway == "construction" else "droga_planowana"
     if highway in _MAIN_ROADS:
         return "droga_glowna"
+    if highway in _SECONDARY:
+        return "droga_drugorzedna"
     if railway == "rail":
         return "kolej"
+    if railway == "tram":
+        return "tramwaj"
+    if tags.get("aeroway") == "aerodrome":
+        return "lotnisko"
     power = tags.get("power")
     if power == "line":
         voltage = _max_voltage(tags.get("voltage"))
+        if voltage is not None and voltage >= 220000:
+            return "linia_najwyzsza"
         return "linia_wn" if voltage is not None and voltage >= 110000 else "linia_inna"
     if power == "substation":
         voltage = _max_voltage(tags.get("voltage"))
@@ -120,13 +135,23 @@ def classify(tags: Dict[str, str]) -> Optional[str]:
     return _LANDUSE.get(tags.get("landuse"))
 
 
+def is_pse(tags: Dict[str, str]) -> bool:
+    """Operator tagged as PSE (the name is written in several ways, so the Wikidata id comes first)."""
+    if tags.get("operator:wikidata") == PSE_WIKIDATA:
+        return True
+    operator = (tags.get("operator") or "").casefold()
+    return "pse" in operator.replace(".", " ").split() or "polskie sieci elektroenergetyczne" in operator
+
+
 def _details(category: str, tags: Dict[str, str]) -> str:
     parts = []
-    if category in ("linia_wn", "linia_inna"):
+    if category in ("linia_najwyzsza", "linia_wn", "linia_inna", "stacja_energetyczna"):
         voltage = _max_voltage(tags.get("voltage"))
         if voltage is not None:
             parts.append("napięcie %g kV" % (voltage / 1000))
-        if tags.get("operator"):
+        if is_pse(tags):
+            parts.append("sieć przesyłowa PSE (wg tagu operatora w OSM)")
+        elif tags.get("operator"):
             parts.append("operator %s" % tags["operator"])
     elif category in ("droga_w_budowie", "droga_planowana"):
         road_class = tags.get("construction") or tags.get("proposed")

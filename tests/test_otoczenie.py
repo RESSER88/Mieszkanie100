@@ -82,9 +82,28 @@ class ClassifyTests(unittest.TestCase):
 
     def test_power_line_by_highest_voltage(self):
         self.assertEqual(oz.classify({"power": "line", "voltage": "110000"}), "linia_wn")
-        self.assertEqual(oz.classify({"power": "line", "voltage": "110000;220000"}), "linia_wn")
+        self.assertEqual(oz.classify({"power": "line", "voltage": "110000;220000"}), "linia_najwyzsza")
+        self.assertEqual(oz.classify({"power": "line", "voltage": "400000"}), "linia_najwyzsza")
         self.assertEqual(oz.classify({"power": "line", "voltage": "15000"}), "linia_inna")
         self.assertEqual(oz.classify({"power": "line"}), "linia_inna")       # unknown voltage
+
+    def test_transmission_grid_operator_marks_pse(self):
+        tags = {"power": "line", "voltage": "220000", "operator": "PSE S.A."}
+        self.assertEqual(oz.classify(tags), "linia_najwyzsza")
+        self.assertIn("sieć przesyłowa PSE", oz._details("linia_najwyzsza", tags))
+        self.assertIn("sieć przesyłowa PSE", oz._details("linia_najwyzsza", {"voltage": "400000",
+                                                                           "operator:wikidata": "Q1749435"}))
+        self.assertNotIn("PSE", oz._details("linia_najwyzsza", {"voltage": "220000", "operator": "Tauron"}))
+
+    def test_more_nuisances(self):
+        self.assertEqual(oz.classify({"railway": "tram"}), "tramwaj")
+        self.assertEqual(oz.classify({"aeroway": "aerodrome", "name": "Muchowiec"}), "lotnisko")
+        self.assertEqual(oz.classify({"highway": "secondary"}), "droga_drugorzedna")
+        self.assertEqual(oz.classify({"highway": "secondary_link"}), "droga_drugorzedna")
+        self.assertIsNone(oz.classify({"highway": "tertiary"}))
+        for key in ("linia_najwyzsza", "tramwaj", "lotnisko", "droga_drugorzedna"):
+            self.assertIn(key, oz.LABELS)
+        self.assertTrue({"linia_najwyzsza", "tramwaj", "droga_drugorzedna"} <= oz.LINEAR)
 
     def test_roads_under_construction_and_planned(self):
         self.assertEqual(oz.classify({"highway": "construction", "construction": "primary"}), "droga_w_budowie")
@@ -159,9 +178,9 @@ class StoreAndQueryTests(unittest.TestCase):
         center = oz.wgs84_to_pl1992(LAT, LON)
         found = oz.nearby(con, center, radius_m=3000)
         self.assertEqual([f["kategoria"] for f in found],
-                         ["linia_wn", "przedszkole", "przedszkole", "droga_w_budowie"])
+                         ["linia_najwyzsza", "przedszkole", "przedszkole", "droga_w_budowie"])
         self.assertAlmostEqual(found[0]["odleglosc_m"], 200, delta=10)
-        self.assertEqual(found[0]["szczegoly"], "napięcie 220 kV, operator PSE")
+        self.assertEqual(found[0]["szczegoly"], "napięcie 220 kV, sieć przesyłowa PSE (wg tagu operatora w OSM)")
         self.assertEqual(found[1]["nazwa"], "Przedszkole nr 1")
         self.assertIn("rok otwarcia 2027", found[3]["szczegoly"])
         self.assertIn("klasa motorway", found[3]["szczegoly"])
@@ -169,7 +188,7 @@ class StoreAndQueryTests(unittest.TestCase):
     def test_nearby_respects_radius(self):
         con = oz.connect(self.db)
         found = oz.nearby(con, oz.wgs84_to_pl1992(LAT, LON), radius_m=500)
-        self.assertEqual(sorted(f["kategoria"] for f in found), ["linia_wn", "przedszkole"])
+        self.assertEqual(sorted(f["kategoria"] for f in found), ["linia_najwyzsza", "przedszkole"])
 
 
 class ReportTests(unittest.TestCase):
