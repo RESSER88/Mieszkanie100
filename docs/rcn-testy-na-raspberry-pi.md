@@ -272,3 +272,9 @@ Drugie źródło: ewidencja budynków (EGiB) w Geoportalu. Sprawdzenie, czy wars
 ```bash
 curl -sS -m 60 "https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza?SERVICE=WFS&VERSION=2.0.0&REQUEST=DescribeFeatureType&TYPENAMES=ms:budynki" | grep -o 'name="[^"]*"' | head -60
 ```
+
+### Wynik sprawdzenia wieku budynku (Raspberry Pi, 2026-10-28, kod `f7568c2`)
+
+- Wszystkie 41 845 rekordów lokali mają identyfikator z częścią `_BUD.`, ale wyszło 33 312 „budynków", czyli prawie jeden budynek na sprzedaż. Przy Szurmana 10 jest 12 różnych identyfikatorów budynku. Grupowanie po identyfikatorze w obecnej postaci nie działa; przyczyna do sprawdzenia na surowych identyfikatorach.
+- Tam, gdzie sprzedaż pierwotna jest, wynik pasuje do rzeczywistości: Szurmana 2–18 pierwsza sprzedaż pierwotna 2021 (Osiedle Franciszkańskie). Braci Mniejszych 1–7B prawie same sprzedaże wtórne od 2017–2019, więc „nieznany" (budynek stał już w 2017 r., ale nie wiadomo od kiedy).
+- EGiB WFS `ms:budynki` ma tylko pola `geom`, `ID_BUDYNKU`, `RODZAJ`, `KONDYGNACJE_NADZIEMNE`, `KONDYGNACJE_PODZIEMNE`. Brak roku budowy, więc to źródło odpada.
