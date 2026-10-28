@@ -157,5 +157,41 @@ class CliTests(unittest.TestCase):
             srv.close()
 
 
+    def test_promoted_offer_listed_twice_is_printed_once(self):
+        srv = FakeOtodom([page_html([ad(1), ad(1)], 1)])
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                rcn = os.path.join(d, "rcn.sqlite")
+                tk.rcn_db(rcn, [tk.sale(i, 10000.0 + 50 * i, area=115.0) for i in range(1, 15)])
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    otodom.main(["szukaj", "--url", srv.base, "--rcn-db", rcn, "--oferty-db", os.path.join(d, "o.sqlite"),
+                                 "--pauza", "0"], today=date(2026, 10, 28))
+                self.assertEqual(out.getvalue().count("otodom.pl/pl/oferta/oferta-1-ID1"), 1)
+                self.assertIn("pobrano 1 ofert", out.getvalue())
+        finally:
+            srv.close()
+
+    def test_same_offer_on_olx_is_marked(self):
+        from rcn import olx
+        import test_olx
+        srv = FakeOtodom([page_html([ad(1, area=110.72, price=1815808)], 1)])
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                rcn = os.path.join(d, "rcn.sqlite")
+                tk.rcn_db(rcn, [tk.sale(i, 10000.0 + 50 * i, area=115.0) for i in range(1, 15)])
+                store_path = os.path.join(d, "o.sqlite")
+                store = olx.OfferStore(store_path)
+                store.upsert([olx.parse_item(test_olx.item(33, m_label="110,72 m²", price=1815808))], "2026-10-27")
+                store.close()
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    otodom.main(["szukaj", "--url", srv.base, "--rcn-db", rcn, "--oferty-db", store_path,
+                                 "--pauza", "0"], today=date(2026, 10, 28))
+                self.assertIn("ta sama oferta także na: olx", out.getvalue())
+        finally:
+            srv.close()
+
+
 if __name__ == "__main__":
     unittest.main()

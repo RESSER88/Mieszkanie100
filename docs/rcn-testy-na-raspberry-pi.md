@@ -244,3 +244,31 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/otodom.py szukaj --dzielnica "
 
 - `rcn/otodom.py szukaj --dzielnica "Ligota-Panewniki" --metraz-od 100`: Otodom ma 79 stron wyników dla Katowic (po 72 oferty), pobrano 10 najnowszych (727 ofert), pasuje 0. Poprawka: filtr metrażu przekazywany do Otodom w adresie (`areaMin`), a ostrzeżenie, gdy stron jest więcej niż `--max-stron`.
 - Ogłoszenie z ul. Widok ma `ad.description` (3656 znaków) i `target.Extras_types = ['balcony', 'lift', 'garage', 'garden']`. Wzmianki były więc poprawne (z opisu i listy cech); błędny był tylko napis „z całej strony" w karcie. Poprawione.
+
+### Powtórzone oferty i ta sama oferta na dwóch portalach (2026-10-28)
+
+- Problem z Pi: Otodom pokazał tę samą ofertę dwa razy (promowana na górze i na liście), a mieszkanie z OLX było też na Otodom bez żadnej informacji.
+- Poprawka: oferta o tym samym identyfikatorze wypisywana raz (`unique_by_id`); oferta podobna do zapamiętanej z innego portalu (metraż w granicach 0,5 m², cena w granicach 1%, ewentualnie odległość poniżej 500 m) ma dopisek „ta sama oferta także na: olx" (`also_on`).
+
+## Wiek budynku z RCN: czy to działa (pozycja 3b kolejki, 2026-10-28)
+
+Pomysł: identyfikator lokalu w RCN zawiera identyfikator budynku (`..._BUD.1_LOK`). Rejestr ma dane od 2012 r., więc:
+
+- pierwsza sprzedaż w budynku to rynek pierwotny w roku 2016 lub później: budynek „do 10 lat (szacunek)", rok przybliżony, bo deweloper często sprzedaje przed oddaniem;
+- pierwsza sprzedaż to rynek pierwotny w latach 2014–2015: „granica około 10 lat";
+- pierwsza sprzedaż przed 2016 r. i nie z rynku pierwotnego: „ponad 10 lat" (budynek już stał);
+- reszta: „nieznany", nigdy „stary" tylko dlatego, że brakuje danych.
+
+Najpierw sprawdzenie na prawdziwej bazie, zanim filtr trafi do raportu okolicy i karty:
+
+```bash
+cd /mnt/nas/projects/mieszkanie100 && git pull && python3 rcn/wiek.py diag --db rcn_test.sqlite --ulica "Szurmana" --ulica "Braci Mniejszych"
+```
+
+Do oceny przez użytkownika: czy budynki przy Szurmana (Osiedle Franciszkańskie, budowane mniej więcej 2016–2020) dostały „do 10 lat" z sensownym rokiem, a starsze bloki „ponad 10 lat". Liczy się też udział rekordów z identyfikatorem budynku i liczba budynków „nieznany".
+
+Drugie źródło: ewidencja budynków (EGiB) w Geoportalu. Sprawdzenie, czy warstwa budynków ma pole z rokiem budowy (z chmury Geoportal jest zablokowany, więc tylko z Pi):
+
+```bash
+curl -sS -m 60 "https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza?SERVICE=WFS&VERSION=2.0.0&REQUEST=DescribeFeatureType&TYPENAMES=ms:budynki" | grep -o 'name="[^"]*"' | head -60
+```

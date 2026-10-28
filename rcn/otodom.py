@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 from rcn import okolica, portale  # noqa: E402
 from rcn.oferta import _PageParser, fetch  # noqa: E402
-from rcn.olx import OfferStore, _comparison, format_offer_line, matches  # noqa: E402
+from rcn.olx import OfferStore, _comparison, also_on, format_offer_line, matches, unique_by_id  # noqa: E402
 
 SEARCH_URL = "https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/katowice/katowice/katowice"
 QUERY = {"viewType": "listing", "by": "LATEST", "direction": "DESC", "limit": "72"}
@@ -136,10 +136,11 @@ def main(argv=None, today: Optional[date] = None) -> int:
     except OtodomError as exc:
         raw, pages, exit_code = exc.partial, None, 1
         note = "UWAGA: %s. Wynik niepełny, nie ponawiać w pętli." % exc
-    offers = [o for item in raw for o in parse_item(item)]
+    offers = unique_by_id(o for item in raw for o in parse_item(item))
     store = OfferStore(args.oferty_db)
     try:
         new_ids = {o["id"] for o in store.upsert(offers, today.isoformat())}
+        others = store.others("otodom")
     finally:
         store.close()
     chosen = [o for o in offers if matches(o, args.dzielnica, args.metraz_od, args.metraz_do, args.cena_do,
@@ -161,7 +162,7 @@ def main(argv=None, today: Optional[date] = None) -> int:
                 o["y_pl1992"], o["x_pl1992"] = center[0], center[1]
                 comparison = "%s; położenie: środek ulicy z %d rekordów RCN" % (
                     _comparison(o, rcn, args.promien, args.miesiace, today), center[2])
-            print(format_offer_line(o, o["id"] in new_ids, comparison))
+            print(format_offer_line(o, o["id"] in new_ids, comparison + also_on(o, others)))
     finally:
         rcn.close()
     print("Ceny ofertowe z Otodom porównane z cenami transakcyjnymi RCN (promień %g m, ostatnie %d mies., podobny"

@@ -169,8 +169,28 @@ class OfferStore:
                                (_url_key(url),)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def others(self, portal: str) -> List[Dict[str, Any]]:
+        """Stored offers from every portal except `portal` (to spot the same flat listed twice)."""
+        rows = self.con.execute("SELECT dane_json FROM oferty WHERE portal != ?", (portal,)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
     def close(self):
         self.con.close()
+
+
+def unique_by_id(offers: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Drop repeats of the same offer (promoted listings appear on several result pages)."""
+    seen, out = set(), []
+    for o in offers:
+        if o["id"] not in seen:
+            seen.add(o["id"])
+            out.append(o)
+    return out
+
+
+def also_on(offer: Dict[str, Any], others: Iterable[Dict[str, Any]]) -> str:
+    portals = sorted({x["portal"] for x in others if portale.same_offer(offer, x)})
+    return " | ta sama oferta także na: %s" % ", ".join(portals) if portals else ""
 
 
 def _zl(value: Optional[float]) -> str:
@@ -229,10 +249,11 @@ def main(argv=None, today: Optional[date] = None) -> int:
     except OlxError as exc:
         raw, total, exit_code = exc.partial, None, 1
         note = "UWAGA: %s. Wynik niepełny, nie ponawiać w pętli." % exc
-    offers = [parse_item(r) for r in raw]
+    offers = unique_by_id(parse_item(r) for r in raw)
     store = OfferStore(args.oferty_db)
     try:
         new_ids = {o["id"] for o in store.upsert(offers, today.isoformat())}
+        others = store.others("olx")
     finally:
         store.close()
     chosen = [o for o in offers if matches(o, args.dzielnica, args.metraz_od, args.metraz_do, args.cena_do,
@@ -244,7 +265,8 @@ def main(argv=None, today: Optional[date] = None) -> int:
     rcn = sqlite3.connect(args.rcn_db)
     try:
         for o in sorted(chosen, key=lambda x: (x["id"] not in new_ids, x.get("cena_m2") or 0)):
-            print(format_offer_line(o, o["id"] in new_ids, _comparison(o, rcn, args.promien, args.miesiace, today)))
+            print(format_offer_line(o, o["id"] in new_ids, _comparison(o, rcn, args.promien, args.miesiace, today)
+                                    + also_on(o, others)))
     finally:
         rcn.close()
     print("Ceny ofertowe z OLX porównane z cenami transakcyjnymi RCN (promień %g m, ostatnie %d mies., podobny metraż)."
