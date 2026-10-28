@@ -183,16 +183,16 @@ def _empty_offer(url: str) -> Dict[str, Any]:
     portal, oid = _portal_and_id(url)
     return {"portal": portal, "id": oid, "url": url, "tytul": None, "cena": None, "powierzchnia_m2": None,
             "cena_m2": None, "pokoje": None, "pietro": None, "rok_budowy": None, "rynek": None, "ulica": None,
-            "miejscowosc": None, "lat": None, "lon": None, "lokalizacja_przyblizona": False, "wzmianki": {},
-            "brakuje": []}
+            "miejscowosc": None, "dzielnica": None, "lat": None, "lon": None, "lokalizacja_przyblizona": False,
+            "wzmianki": {}, "wzmianki_zrodlo": None, "brakuje": []}
 
 
-def _from_json_ld(offer: Dict[str, Any], blocks: Iterable[Any]) -> None:
+def _from_json_ld(offer: Dict[str, Any], blocks: Iterable[Any]) -> Optional[str]:
     candidates = [b for b in blocks if isinstance(b, dict) and ("floorSize" in b or "geo" in b or "offers" in b)]
     if not candidates:
         candidates = [b for b in blocks if isinstance(b, dict) and "price" in b]
     if not candidates:
-        return
+        return None
     block = candidates[0]
     offers = block.get("offers")
     first = offers[0] if isinstance(offers, list) and offers else (offers if isinstance(offers, dict) else block)
@@ -209,6 +209,20 @@ def _from_json_ld(offer: Dict[str, Any], blocks: Iterable[Any]) -> None:
     offer["miejscowosc"] = address.get("addressLocality")
     geo = block.get("geo") if isinstance(block.get("geo"), dict) else {}
     offer["lat"], offer["lon"] = to_number(geo.get("latitude")), to_number(geo.get("longitude"))
+    description = block.get("description")
+    return description if isinstance(description, str) and description.strip() else None
+
+
+def _places(value: Any):
+    """(city, district) from "Katowice, Ligota" or ["śląskie", "Katowice", "Ligota"]."""
+    if isinstance(value, str):
+        parts = [p.strip() for p in value.split(",") if p.strip()]
+    elif isinstance(value, list):
+        parts = [p.strip() for p in value if isinstance(p, str) and p.strip()]
+    else:
+        return None, None
+    parts = [p for p in parts if not p.lower().endswith("skie") and "województwo" not in p.lower()]
+    return (parts[0] if parts else None), (parts[1] if len(parts) > 1 else None)
 
 
 def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]:
@@ -227,9 +241,7 @@ def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]
     offer["tytul"] = listing.get("title") if isinstance(listing.get("title"), str) else None
     location = listing.get("location")
     offer["ulica"] = _find_key(location, r"street")
-    place = _find_key(location, r"location|city|locality")
-    if isinstance(place, str):
-        offer["miejscowosc"] = place.split(",")[0].strip()
+    offer["miejscowosc"], offer["dzielnica"] = _places(_find_key(location, r"location|city|locality"))
     offer["lat"] = to_number(_find_key(listing, r"lat(itude)?"))
     offer["lon"] = to_number(_find_key(listing, r"lon(gitude)?|lng"))
     details = listing.get("buildingDetailedInformation")
@@ -262,13 +274,15 @@ def parse_listing(html: str, url: str) -> Dict[str, Any]:
     if offer["portal"] == "gratka":
         description = _from_gratka(offer, other)
     if offer["cena"] is None and offer["powierzchnia_m2"] is None:
-        _from_json_ld(offer, ld_blocks)
+        description = _from_json_ld(offer, ld_blocks)
     offer["tytul"] = offer["tytul"] or meta.get("og:title") or " ".join(parser.title.split()) or None
     if offer["cena_m2"] is None and offer["cena"] and offer["powierzchnia_m2"]:
         offer["cena_m2"] = round(offer["cena"] / offer["powierzchnia_m2"], 2)
     text = html_to_text(html)
     offer["lokalizacja_przyblizona"] = "lokalizacja przybliżona" in text.lower()
-    offer["wzmianki"] = features_from_text(" ".join(t for t in (description, text) if t))
+    # Mentions come from the listing's own description; the whole page also holds recommended listings.
+    offer["wzmianki"] = features_from_text(description or text)
+    offer["wzmianki_zrodlo"] = "opis" if description else "cała strona"
     if offer["rok_budowy"] is None and "rok" in offer["wzmianki"]:
         offer["rok_budowy"] = offer["wzmianki"]["rok"]
     offer["brakuje"] = [f for f in REQUIRED if (f == "wspolrzedne" and (offer["lat"] is None or offer["lon"] is None))

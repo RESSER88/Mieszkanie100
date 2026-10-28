@@ -161,3 +161,17 @@ cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://gratka.pl/ni
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && python3 rcn/karta.py "https://katowice.nieruchomosci-online.pl/mieszkanie,z-aneksem-kuchennym/26868680.html" --file ref/oferty/katowice_nieruchomosci-online_pl_26868680_html.html
 ```
+
+### Pierwsze karty na prawdziwych stronach (Raspberry Pi, 2026-10-28, kod `6492a2c`)
+
+Obie karty (Gratka i Nieruchomosci-online.pl, to samo mieszkanie) dały ten sam wynik porównania:
+
+- Rynek wtórny, 500 m, 24 miesiące, lokale 46–85 m²: próbka 54, mediana 10 913 zł/m², typowy zakres 9 919–11 770 zł/m².
+- Rynek pierwotny: próbka 9 (za mała), mediana 9 668 zł/m².
+- Oferta 12 892 zł/m²: powyżej typowego zakresu, tańszych sprzedaży 88,9%.
+- Najbliższe sprzedaże w tych samych budynkach są droższe niż mediana okolicy: Szurmana 18 (11 984 zł/m², 2025-10), Szurmana 10 (11 523, 2026-05), Książęca 22 (12 930 i 13 241, 2025-09 i 2026-07), Szurmana 2 (12 103, 2025-08). Promień 500 m miesza nowe osiedle ze starszą zabudową, co uzasadnia pozycję 3b (wiek budynku).
+
+Błędy i poprawki:
+
+- Gratka: wzmianki „ogród 72 m², taras 28 m²" pochodziły z ogłoszeń polecanych na tej samej stronie. Wzmianki są teraz brane tylko z opisu ogłoszenia, a gdy portal nie daje opisu, z całej strony z oznaczeniem „mniej pewne".
+- Gratka: „brak miejscowości", bo lokalizacja jest listą miejsc. Teraz miasto i dzielnica są odczytywane z listy (pomijając województwo).

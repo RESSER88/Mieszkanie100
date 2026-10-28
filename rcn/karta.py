@@ -78,13 +78,15 @@ def format_card(card: Dict[str, Any]) -> str:
             _num(o.get("cena")), _num(o.get("powierzchnia_m2"), 2), _num(o.get("cena_m2")),
             o.get("pokoje") if o.get("pokoje") is not None else "brak",
             o.get("pietro") if o.get("pietro") is not None else "brak", market_text),
-        "Adres: %s, %s; rok budowy %s" % (o.get("ulica") or "brak ulicy", o.get("miejscowosc") or "brak miejscowości",
-                                          o.get("rok_budowy") or "nieznany"),
+        "Adres: %s, %s%s; rok budowy %s" % (o.get("ulica") or "brak ulicy", o.get("miejscowosc") or "brak miejscowości",
+                                            ", " + o["dzielnica"] if o.get("dzielnica") else "",
+                                            o.get("rok_budowy") or "nieznany"),
     ]
     if o.get("wzmianki"):
         mentions = ", ".join("%s%s" % (k, "" if v is True else " %g m²" % v if isinstance(v, float) else " %s" % v)
                              for k, v in o["wzmianki"].items())
-        lines.append("Wzmianki w treści ogłoszenia: %s" % mentions)
+        source = "z opisu" if o.get("wzmianki_zrodlo") == "opis" else "z całej strony, mniej pewne"
+        lines.append("Wzmianki w treści ogłoszenia (%s): %s" % (source, mentions))
     if o.get("lokalizacja_przyblizona"):
         lines.append("Lokalizacja w ogłoszeniu jest przybliżona, więc promień liczony jest od przybliżonego punktu.")
     area_min, area_max = card["zakres_m2"]

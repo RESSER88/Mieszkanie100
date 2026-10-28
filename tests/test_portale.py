@@ -50,7 +50,8 @@ GR_NUXT = [
 ]
 GR_HTML = ('<html><head><title>Mieszkanie na sprzedaż 65 m² (4 pok.) | Katowice | Gratka</title>'
            '<script type="application/ld+json">{"@type":"Product","price":839000,"priceCurrency":"PLN"}</script>'
-           '<script type="application/json" id="__NUXT_DATA__">%s</script></head><body></body></html>'
+           '<script type="application/json" id="__NUXT_DATA__">%s</script></head><body>'
+           '<div>Polecane: mieszkanie z ogródkiem 72 m² i tarasem 28 m²</div></body></html>'
            % json.dumps(GR_NUXT, ensure_ascii=False))
 
 
@@ -90,6 +91,16 @@ class NieruchomosciOnlineTests(unittest.TestCase):
     def test_nothing_missing(self):
         self.assertEqual(self.offer["brakuje"], [])
 
+    def test_whole_page_mentions_are_marked_less_certain(self):
+        self.assertEqual(self.offer["wzmianki_zrodlo"], "cała strona")
+
+    def test_json_ld_description_preferred_over_page_text(self):
+        ld = json.loads(json.dumps(NO_LD))
+        ld[3]["description"] = "Mieszkanie z tarasem 30 m²."
+        html = NO_HTML.replace(json.dumps(NO_LD[3], ensure_ascii=False), json.dumps(ld[3], ensure_ascii=False))
+        offer = pt.parse_listing(html, NO_URL)
+        self.assertEqual((offer["wzmianki"], offer["wzmianki_zrodlo"]), ({"taras": 30.0}, "opis"))
+
 
 class GratkaTests(unittest.TestCase):
     def setUp(self):
@@ -108,9 +119,19 @@ class GratkaTests(unittest.TestCase):
         self.assertEqual((o["lat"], o["lon"]), (50.2318, 18.9681))
         self.assertEqual(o["ulica"], "Biskupa Tadeusza Szurmana")
 
-    def test_features_from_description(self):
+    def test_features_from_description_only(self):
         self.assertEqual(self.offer["wzmianki"]["balkon"], 7.0)
-        self.assertNotIn("ogrod", self.offer["wzmianki"])
+        self.assertNotIn("ogrod", self.offer["wzmianki"])     # garden of a recommended listing
+        self.assertNotIn("taras", self.offer["wzmianki"])
+        self.assertEqual(self.offer["wzmianki_zrodlo"], "opis")
+
+    def test_location_given_as_list_of_places(self):
+        arr = json.loads(json.dumps(GR_NUXT))
+        arr[16] = [33, 34, 35]
+        arr += ["śląskie", "Katowice", "Ligota"]
+        html = GR_HTML.replace(json.dumps(GR_NUXT, ensure_ascii=False), json.dumps(arr, ensure_ascii=False))
+        offer = pt.parse_listing(html, GR_URL)
+        self.assertEqual((offer["miejscowosc"], offer["dzielnica"]), ("Katowice", "Ligota"))
 
     def test_offer_never_contains_contact_data(self):
         text = json.dumps(self.offer, ensure_ascii=False) + json.dumps(pt.parse_listing(NO_HTML, NO_URL),
