@@ -227,5 +227,25 @@ class OtodomTests(unittest.TestCase):
             self.assertNotIn(secret, text)
 
 
+class CoordinateFallbackTests(unittest.TestCase):
+    def test_nieruchomosci_online_map_variable(self):
+        html = ('<html><head><title>Mieszkanie</title></head><body><script>var mapOffer = {"latitude":"50.2318",'
+                '"longitude":"18.9681","isInaccurateLocation":1,"zoom":15};</script></body></html>')
+        o = pt.parse_listing(html, "https://katowice.nieruchomosci-online.pl/mieszkanie,m3/26900009.html")
+        self.assertEqual((o["lat"], o["lon"]), (50.2318, 18.9681))
+        self.assertTrue(o["lokalizacja_przyblizona"])
+
+    def test_morizon_initial_state_coords(self):
+        html = ('<html><body><script>window.__INITIAL_STATE__ = JSON.parse(JSON.stringify({"property":'
+                '{"coords": "50.2601,19.0012","area":45}}));</script></body></html>')
+        o = pt.parse_listing(html, "https://www.morizon.pl/oferta/sprzedaz-mieszkanie-katowice-dab-45m2-mzn2048100113")
+        self.assertEqual(o["portal"], "morizon")
+        self.assertEqual((o["lat"], o["lon"]), (50.2601, 19.0012))
+
+    def test_json_ld_position_is_not_replaced(self):
+        o = pt.parse_listing(NO_HTML + '<script>var mapX = {"latitude":"1.0","longitude":"2.0"};</script>', NO_URL)
+        self.assertNotEqual(o["lat"], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

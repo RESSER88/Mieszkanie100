@@ -309,6 +309,29 @@ def _from_otodom(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]
     return html_to_text(description) if isinstance(description, str) else None
 
 
+_NO_MAP = re.compile(r"var map[A-Za-z_-]*\s*=\s*(\{.*?\});", re.S)
+_COORDS = re.compile(r'"coords"\s*:\s*"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)"')
+
+
+def _coordinates_from_scripts(offer: Dict[str, Any], html: str) -> None:
+    """Positions some portals keep only in page scripts (formats as read by marcmos/flatscraper):
+    Nieruchomosci-online `var map… = {"latitude": …, "longitude": …}`, Morizon `"coords": "lat,lon"`."""
+    for match in _NO_MAP.finditer(html):
+        try:
+            data = json.loads(match.group(1))
+        except ValueError:
+            continue
+        lat, lon = to_number(data.get("latitude")), to_number(data.get("longitude"))
+        if lat is not None and lon is not None:
+            offer["lat"], offer["lon"] = lat, lon
+            if str(data.get("isInaccurateLocation")) in ("1", "true", "True"):
+                offer["lokalizacja_przyblizona"] = True
+            return
+    match = _COORDS.search(html)
+    if match:
+        offer["lat"], offer["lon"] = float(match.group(1)), float(match.group(2))
+
+
 def parse_listing(html: str, url: str) -> Dict[str, Any]:
     """One normalised offer from a saved listing page; `brakuje` lists what could not be read."""
     offer = _empty_offer(url)
@@ -337,6 +360,8 @@ def parse_listing(html: str, url: str) -> Dict[str, Any]:
         offer["cena_m2"] = round(offer["cena"] / offer["powierzchnia_m2"], 2)
     text = html_to_text(html)
     offer["lokalizacja_przyblizona"] = "lokalizacja przybliżona" in text.lower()
+    if offer["lat"] is None or offer["lon"] is None:
+        _coordinates_from_scripts(offer, html)
     # Mentions come from the listing's own description; the whole page also holds recommended listings.
     offer["wzmianki"] = features_from_text(description or text)
     offer["wzmianki_zrodlo"] = "opis" if description else "cała strona"
