@@ -333,3 +333,10 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && cd ref/osm && osmium tags-filt
 - `gov.pl/web/gddkia/msbd`: HTTP 200, 74 KB, bez linków do usług i plików z danymi w kodzie strony (mapa prawdopodobnie wczytywana skryptem). `drogi.gddkia.gov.pl/mapy`: 212 bajtów, czyli przekierowanie lub pusta strona startowa aplikacji. `www.gddkia.gov.pl`: brak odpowiedzi w 60 s.
 - PSE: strona planu sieci HTTP 200, bez linków do danych; mapa inwestycji HTTP 404 (adres się zmienił). Wiki OSM: 28 relacji linii PSE.
 - Wniosek: nie ma oficjalnej usługi z geometrią ani dla PSE, ani dla stanu budowy dróg GDDKiA. Zostaje OSM. Ostatnia możliwość dla GDDKiA: podgląd ruchu sieciowego strony mapy w przeglądarce (F12), jak przy KMZB.
+
+## Nieruchomosci-online i Morizon na Pi (2026-10-29)
+
+- Lista wyników Nieruchomosci-online (`https://katowice.nieruchomosci-online.pl/mieszkania,sprzedaz/`): 47 ofert na stronę, selektory z flatscraper działają. Skrypt `tilesData` na stronie listy ma dla każdej oferty współrzędne, dokładność, rynek, a lokale inwestycji mają klucz `i<numer inwestycji>_<numer oferty>`. Od kodu `63e4222` położenie bierzemy z listy, a stronę ogłoszenia pobieramy tylko dla ofert bez położenia (albo dla wszystkich z `--szczegoly-wszystkie`). Próba od 100 m², 3 strony: 126 ofert na liście, 6 pasuje, wszystkie z położeniem.
+- Karta z linku Nieruchomosci-online działa (ul. Szurmana, 839 000 zł, 65,08 m²).
+- Morizon: lista działa (35 kart na stronę). Strona ogłoszenia ma dane w `__NUXT_DATA__` jak Gratka (wspólna platforma); położenie to środek mapy (`center`), nie jej ramki. Przed kodem `63e4222` karta Morizon kończyła się błędem „brak współrzędnych”.
+- mScanner: API pod `https://api.mscanner.pl/api`; strona opisuje oferty deweloperów na mapie i decyzje o pozwoleniu na budowę, ale adresów tych zapytań nie ma w pobranych plikach. Do rozpoznania przez podgląd ruchu sieciowego strony mScanner (F12).
