@@ -114,6 +114,14 @@ class CardJsonTests(unittest.TestCase):
             self.assertIn("tylko linki do portali", body["blad"])
         self.assertTrue(mapa.allowed_link("https://www.otodom.pl/pl/oferta/abc"))
 
+    def test_link_wins_over_leftover_manual_fields(self):
+        from unittest import mock
+        with mock.patch.object(mapa.karta, "offer_from_link", side_effect=mapa.karta.CardError("pobrano link")) as got:
+            status, body = mapa.card_json(self.ctx, {"link": "https://www.otodom.pl/pl/oferta/x-ID1", "ulica": "Szurmana",
+                                                     "cena": "839000", "metraz": "65"})
+        got.assert_called_once()
+        self.assertEqual(body["blad"], "pobrano link")
+
     def test_errors_are_messages(self):
         self.assertEqual(mapa.card_json(self.ctx, {})[0], 400)
         status, body = mapa.card_json(self.ctx, {"ulica": "Nieznana", "cena": "1", "metraz": "1"})

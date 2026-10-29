@@ -541,7 +541,11 @@ $("manual-toggle").addEventListener("click", () => toggleManual($("manual").hidd
 
 $("f").addEventListener("submit", ev => {
   ev.preventDefault();
-  run(new URLSearchParams([...new FormData(ev.target)].filter(([k, v]) => v)).toString());
+  // Manual fields go only with an open manual panel and no link, so leftovers never replace a pasted link.
+  const manual = new Set(["ulica", "cena", "metraz", "rynek", "rok"]);
+  const useManual = !$("manual").hidden && !$("link").value.trim();
+  run(new URLSearchParams([...new FormData(ev.target)]
+    .filter(([k, v]) => v && (!manual.has(k) || useManual))).toString());
 });
 
 // A shared address (?link=… or ?ulica=…) fills the form and shows the card straight away.

@@ -151,17 +151,17 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
     except ValueError:
         return 400, {"ok": False, "blad": "promień 1–3000 m, okres 1–180 miesięcy"}
     try:
-        if params.get("ulica"):
+        if link:      # a pasted link wins over manual fields left over from an earlier card
+            if not allowed_link(link):
+                return 400, {"ok": False, "blad": "obsługiwane są tylko linki do portali: " + ", ".join(PORTALS)}
+            offer = karta.offer_from_link(link, oferty_db=ctx.oferty_db)
+        elif params.get("ulica"):
             if not (params.get("cena") and params.get("metraz")):
                 raise karta.CardError("wpis ręczny wymaga ulicy, ceny i metrażu")
             rok = int(params["rok"]) if (params.get("rok") or "").isdigit() else None
             rynek = params.get("rynek") if params.get("rynek") in ("wtorny", "pierwotny") else None
             offer = karta.manual_offer(ctx.rcn_db, params["ulica"], params["cena"], params["metraz"],
                                        params.get("miasto") or "Katowice", rynek, rok)
-        elif link:
-            if not allowed_link(link):
-                return 400, {"ok": False, "blad": "obsługiwane są tylko linki do portali: " + ", ".join(PORTALS)}
-            offer = karta.offer_from_link(link, oferty_db=ctx.oferty_db)
         else:
             return 400, {"ok": False, "blad": "wklej link do ogłoszenia albo wpisz ulicę, cenę i metraż"}
         rcn = sqlite3.connect(ctx.rcn_db)

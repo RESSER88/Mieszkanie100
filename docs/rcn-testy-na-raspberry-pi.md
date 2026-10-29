@@ -324,3 +324,12 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && cd ref/osm && osmium tags-filt
 - Zgłoszenie: linie PSE są w danych OSM i dobrze oznaczone, ale nie widać ich na mapie. Przyczyna w kodzie: mapa i tabela brały obiekty tylko do 3 km od oferty, a najbliższa linia 220–400 kV bywa dalej. Druga możliwa przyczyna: baza OSM wczytana przed podziałem na 110 kV i 220–400 kV.
 - Poprawka: linie 110 kV i 220–400 kV są szukane i rysowane do 10 km (`GRID_RADIUS_M` w `rcn/mapa.py`); w tabeli „Otoczenie” widać odległość do najbliższej, a kliknięcie wiersza przybliża mapę do niej.
 - Diagnoza na Pi (liczby linii w bazie wg rodzaju, ile ma operatora PSE, odległość od dwóch ulic): polecenie w odpowiedzi z 2026-10-29, wynik do dopisania tutaj.
+- Wynik diagnozy (Pi, 2026-10-29): w bazie `linia_inna` 156, `linia_najwyzsza` 381 (z operatorem PSE 217), `linia_wn` 2308 odcinków. Najbliższa linia 220–400 kV: 3939 m od Szurmana, 4058 m od Braci Mniejszych (25 odcinków do 10 km), czyli poza dawnym limitem 3 km. Najbliższa 110 kV: 1076 m i 1139 m. Poprawka do 10 km rozwiązuje zgłoszenie.
+- Błąd z logu serwera: link Otodom wysłany razem z polami wpisu ręcznego (pozostałymi z wcześniejszej karty) dawał kartę z wpisu ręcznego. Poprawka: link ma pierwszeństwo na serwerze, a strona wysyła pola ręczne tylko przy otwartym wpisie ręcznym i pustym polu linku.
+
+### Wynik rozpoznania źródeł na Pi (`scripts/zrodla_probe.sh`, 2026-10-29)
+
+- GDDKiA `SiecDrogowa`: WMS działa (HTTP 200), warstwy `punkty`, `glowne`, `glownep`, `ekspresowe`, `autostrady`, czyli istniejąca sieć dróg krajowych, bez stanu budowy. WFS: HTTP 400, więc tej usługi nie ma. Nie nadaje się do „dróg w budowie i planowanych”.
+- `gov.pl/web/gddkia/msbd`: HTTP 200, 74 KB, bez linków do usług i plików z danymi w kodzie strony (mapa prawdopodobnie wczytywana skryptem). `drogi.gddkia.gov.pl/mapy`: 212 bajtów, czyli przekierowanie lub pusta strona startowa aplikacji. `www.gddkia.gov.pl`: brak odpowiedzi w 60 s.
+- PSE: strona planu sieci HTTP 200, bez linków do danych; mapa inwestycji HTTP 404 (adres się zmienił). Wiki OSM: 28 relacji linii PSE.
+- Wniosek: nie ma oficjalnej usługi z geometrią ani dla PSE, ani dla stanu budowy dróg GDDKiA. Zostaje OSM. Ostatnia możliwość dla GDDKiA: podgląd ruchu sieciowego strony mapy w przeglądarce (F12), jak przy KMZB.
