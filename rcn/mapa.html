@@ -136,15 +136,36 @@
          border-radius: 4px; border: 2px solid var(--ink); color: var(--ink); font: 700 11px/1 system-ui, sans-serif; }
   /* Work area: map left (sticky), findings right. Phone: stacked. */
   .work { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); }
-  #map { height: 56vh; min-height: 300px; background: var(--band); }
+  /* Phone and tablet: a square map as wide as the screen, never taller than 70% of it (landscape too). */
+  #map { height: min(100vw, 70vh); height: min(100vw, 70dvh); min-height: 260px; background: var(--band); }
   #panel { background: var(--surface); padding: 4px 16px 32px; }
-  @media (min-width: 1024px) {
+  /* Wide screens and phones held sideways: an app layout. The map fills exactly the space under the bar;
+     only the right column scrolls. Keep this query equal to WIDE in the script. */
+  @media (min-width: 1024px), (min-width: 640px) and (max-height: 560px) {
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; overflow: hidden; }
+    .bar { flex: none; }
     .bar-in { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 24px; }
     .bar-in > .side { grid-column: 2; }
-    .work { grid-template-columns: minmax(0, 1fr) 460px; grid-template-rows: auto 1fr; }
-    #map { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: 0; height: 100vh; align-self: start; }
-    #filters { grid-column: 2; grid-row: 1; border-left: 1px solid var(--line); }
-    #panel { grid-column: 2; grid-row: 2; border-left: 1px solid var(--line); min-height: 100vh; }
+    .bar-in { max-width: none; }
+    .work { flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; grid-template-columns: minmax(0, 1fr) 460px;
+            grid-template-rows: auto minmax(0, 1fr); }
+    #map { grid-column: 1; grid-row: 1 / span 2; height: 100%; min-height: 0; }
+    #filters { grid-column: 2; grid-row: 1; border-left: 1px solid var(--line); max-height: 55vh; overflow-y: auto; }
+    #panel { grid-column: 2; grid-row: 2; border-left: 1px solid var(--line); overflow-y: auto; min-height: 0; }
+  }
+  /* Phones sideways: one compact bar line (tabs and the search field side by side), a narrower panel. */
+  @media (min-width: 640px) and (max-height: 560px) and (max-width: 1023px) {
+    .bar { padding: 6px 12px; }
+    .bar-in { grid-template-columns: minmax(0, 1fr); }
+    .bar-in > .side { grid-column: 1; }
+    .brand { display: none; }
+    .side { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; }
+    .side > .modes { grid-row: 1; }
+    .side > form { grid-column: 2; grid-row: 1; }
+    .side > #status { grid-column: 1 / -1; font-size: 12.5px; min-height: 0; }
+    .opts, #manual { display: none; }
+    .work { grid-template-columns: minmax(0, 1fr) minmax(300px, 42%); }
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
@@ -397,6 +418,7 @@
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+const WIDE = matchMedia("(min-width: 1024px), (min-width: 640px) and (max-height: 560px)");   // same as the CSS
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const zl = v => v == null ? "–" : Math.round(v).toLocaleString("pl-PL");
 const m2 = v => v == null ? "–" : (+v).toLocaleString("pl-PL", {maximumFractionDigits: 1});
@@ -470,7 +492,7 @@ function legendHtml(m) {
 let legendBox = null;
 legend.onAdd = () => {
   legendBox = L.DomUtil.create("details", "legend");
-  legendBox.open = window.innerWidth >= 1024;
+  legendBox.open = window.innerWidth >= 1024;   // the legend covers too much of a sideways phone
   legendBox.innerHTML = legendHtml("karta");
   L.DomEvent.disableClickPropagation(legendBox);
   return legendBox;
@@ -662,7 +684,7 @@ function highlight(kat) {
     map.fitBounds(L.latLngBounds([n.getBounds().getCenter(), L.latLng(lastCenter)]).pad(.3), {maxZoom: 16});
     n.openPopup();
   }
-  if (window.innerWidth < 1024) $("map").scrollIntoView();
+  if (!WIDE.matches) $("map").scrollIntoView();
 }
 
 $("panel").addEventListener("click", ev => {
@@ -673,7 +695,7 @@ $("panel").addEventListener("click", ev => {
   if (!row || ev.target.closest("a")) return;
   const list = row.dataset.kind === "similar" ? similarMarkers : saleMarkers;
   const m = list[+row.dataset.i];
-  if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); m.openPopup(); if (window.innerWidth < 1024) $("map").scrollIntoView(); }
+  if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 16)); m.openPopup(); if (!WIDE.matches) $("map").scrollIntoView(); }
 });
 
 async function run(params) {
@@ -864,7 +886,7 @@ $("s-list").addEventListener("click", ev => {
   if (!m) return;
   const cluster = searchLayers[1];
   cluster.zoomToShowLayer(m, () => m.openPopup());
-  if (window.innerWidth < 1024) $("map").scrollIntoView();
+  if (!WIDE.matches) $("map").scrollIntoView();
 });
 
 async function runSearch(params) {
@@ -887,7 +909,7 @@ async function runSearch(params) {
 }
 $("fs").addEventListener("submit", ev => {
   ev.preventDefault();
-  if (window.innerWidth < 1024) $("filters").open = false;     // phone: show the map, not the form
+  if (!WIDE.matches) $("filters").open = false;     // phone: show the map, not the form
   runSearch(searchParams(ev.target).toString());
 });
 
@@ -917,7 +939,7 @@ $("f-reset").addEventListener("click", () => {
   });
   filterSummary();
 });
-$("filters").open = window.innerWidth >= 1024;
+$("filters").open = WIDE.matches;
 filterSummary();
 
 // A shared address fills the form and runs straight away: ?link=… or ?ulica=… (card), ?tryb=szukaj&… (search).

@@ -31,3 +31,12 @@ Poprawka (Impeccable: tryb Operate i progi z craft-floor; Taste Skill: zasady ek
 - „Więcej filtrów” z liczbą aktywnych ukrytych filtrów; „Wyczyść filtry”.
 - Legenda zależy od trybu (w wyszukiwaniu: kolory cen, skupiska, inwestycje, pinezka).
 - Wynik po poprawce: nagłówek 138 px (komputer), 211 px (telefon), brak przewijania w bok na 390, 820 i 1440 px, brak błędów JavaScript.
+
+## Mapa mieści się w oknie (2026-10-29)
+
+Zgłoszenie: mapa nie mieści się na stronie i jest poziomym paskiem zamiast prostokąta bliskiego kwadratowi. Przyczyny: na komputerze mapa miała wysokość okna, ale zaczynała się pod nagłówkiem (dół ucięty); na telefonie miała 56% wysokości ekranu, a w poziomie wychodził pasek 273 px; na dużym monitorze strona miała najwyżej 1440 px szerokości.
+
+- Komputer (szerokość od 1024 px) i telefon w poziomie: układ aplikacji. Nagłówek, pod nim mapa dokładnie do dołu okna, przewija się tylko prawa kolumna (filtry najwyżej 55% wysokości, wyniki pod nimi). Na dużym monitorze mapa wypełnia całą szerokość.
+- Telefon w poziomie: jedna linia nagłówka (zakładki i pole wyszukiwania obok siebie), bez nazwy i bez opcji karty (promień, okres, wpis ręczny są w widoku pionowym).
+- Telefon i tablet w pionie: mapa kwadratowa o boku równym szerokości ekranu, najwyżej 70% jego wysokości.
+- Zmierzone w przeglądarce: 1920×1080, 1280×720, 820×1180, 390×844 i 844×390; mapa w całości w oknie (poza widokiem pionowym telefonu z otwartym wpisem ręcznym), bez przewijania w bok.
