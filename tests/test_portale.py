@@ -242,6 +242,21 @@ class CoordinateFallbackTests(unittest.TestCase):
         self.assertEqual(o["portal"], "morizon")
         self.assertEqual((o["lat"], o["lon"]), (50.2601, 19.0012))
 
+    def test_morizon_nuxt_data_center_not_map_bounds(self):
+        import json as _json
+        arr = [{"property": 1},
+               {"area": 2, "price": 3, "priceM2": 4, "bounds": 11, "location": 5, "title": 10},
+               45, 560000, 12444, {"map": 6, "street": 9}, {"center": 7, "zoom": 8},
+               {"latitude": 14, "longitude": 15}, 13, "Dąb", "Mieszkanie 2 pokoje",
+               {"northeast": 12, "southwest": 13}, {"latitude": 16, "longitude": 17}, {"latitude": 18, "longitude": 19},
+               50.2739, 18.9992, 50.30, 19.12, 50.13, 18.89]
+        html = ('<html><body><script type="application/json" id="__NUXT_DATA__">%s</script></body></html>'
+                % _json.dumps(arr))
+        o = pt.parse_listing(html, "https://www.morizon.pl/oferta/sprzedaz-mieszkanie-katowice-dab-45m2-mzn2048100113")
+        self.assertEqual((o["cena"], o["powierzchnia_m2"], o["cena_m2"]), (560000.0, 45.0, 12444.0))
+        self.assertEqual((o["lat"], o["lon"]), (50.2739, 18.9992))
+        self.assertEqual(o["id"], "2048100113")
+
     def test_json_ld_position_is_not_replaced(self):
         o = pt.parse_listing(NO_HTML + '<script>var mapX = {"latitude":"1.0","longitude":"2.0"};</script>', NO_URL)
         self.assertNotEqual(o["lat"], 1.0)

@@ -76,6 +76,7 @@ def _unique(candidates, limit: Optional[int]) -> List[Dict[str, Any]]:
                        "cena_m2": o.get("cena_m2"), "rynek": o.get("rynek"), "inwestycja": o.get("inwestycja"),
                        "pokoje": o.get("pokoje"), "pietro": o.get("pietro"), "ulica": o.get("ulica"),
                        "zabudowa": o.get("zabudowa"), "dzielnica": o.get("dzielnica"),
+                       "inwestycja_id": o.get("inwestycja_id"),
                        "odleglosc_m": round(distance), "polozenie": where, "punkt": [round(lat, 6), round(lon, 6)],
                        "pierwszy_raz": first, "ostatnio": last, "takze_na": [], "_oferta": o})
     for c in chosen:
@@ -116,11 +117,17 @@ def group_offers(offers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Groups keep the order of their nearest offer."""
     groups: Dict[Tuple, Dict[str, Any]] = {}
     for o in offers:
-        key = ("inwestycja", _norm(o["inwestycja"])) if o.get("inwestycja") else \
-            ("punkt", round(o["punkt"][0], 4), round(o["punkt"][1], 4))
+        if o.get("inwestycja"):
+            key = ("inwestycja", _norm(o["inwestycja"]))
+        elif o.get("inwestycja_id"):
+            key = ("inwestycja_id", o["portal"], o["inwestycja_id"])
+        else:
+            key = ("punkt", round(o["punkt"][0], 4), round(o["punkt"][1], 4))
         g = groups.get(key)
         if g is None:
-            g = groups[key] = {"inwestycja": o.get("inwestycja"), "nazwa": o.get("inwestycja") or o.get("tytul"),
+            name = o.get("inwestycja") or ("inwestycja nr %s (%s)" % (o["inwestycja_id"], o["portal"])
+                                            if o.get("inwestycja_id") else None)
+            g = groups[key] = {"inwestycja": name, "nazwa": name or o.get("tytul"),
                                "punkt": o["punkt"], "odleglosc_m": o["odleglosc_m"], "polozenie": o["polozenie"],
                                "oferty": []}
         g["oferty"].append(o)

@@ -25,7 +25,11 @@ NO_LIST = """<html><body><section class="tiles">
  <div class="tertiary__box--primary"><span>600 000 zł</span><span>60 m²</span></div></div>
 <div class="tile"><h2 class="name"><a href="https://katowice.nieruchomosci-online.pl/mieszkanie,m2/26900003.html">Małe</a></h2>
  <div class="tertiary__box--primary"><span>400 000 zł</span><span>38 m²</span></div></div>
-</section></body></html>"""
+</section>
+<script>var x = {tilesData: {"a26900001":{"isSupplementAd":false,"map":{"latitude":"50.2342909","longitude":"18.9526614",
+"accuracy":"9","inaccurateLocation":0},"market":"secondary","pt":1},"i46289_26900003":{"isSupplementAd":false,
+"map":{"latitude":"50.2597364","longitude":"19.0589266","isInaccurateLocation":1},"market":"primary","t":"a {b} c"}}, other: 1};</script>
+</body></html>"""
 
 MORIZON_LIST = """<html><body>
 <div data-cy="card"><a data-cy="propertyUrl" href="/oferta/sprzedaz-mieszkanie-katowice-ligota-panewnicka-120m2-mzn2045678901">x</a>
@@ -45,6 +49,13 @@ class ListParserTests(unittest.TestCase):
         self.assertEqual(first["tytul"], "Mieszkanie z ogrodem, Ligota")
         self.assertEqual(first["portal"], "nieruchomosci-online")
 
+    def test_nieruchomosci_online_positions_from_tiles_data(self):
+        items = {i["id"]: i for i in listy.parse_no_list(NO_LIST, city_url="https://katowice.nieruchomosci-online.pl")}
+        a, unit = items["26900001"], items["26900003"]
+        self.assertEqual((a["lat"], a["lon"], a["rynek"], a["lokalizacja_przyblizona"]),
+                         (50.2342909, 18.9526614, "wtorny", False))
+        self.assertEqual((unit["rynek"], unit["inwestycja_id"], unit["lokalizacja_przyblizona"]), ("pierwotny", "46289", True))
+
     def test_morizon_cards(self):
         items = listy.parse_morizon_list(MORIZON_LIST)
         self.assertEqual([i["id"] for i in items], ["2045678901", "2045678902"])
@@ -63,7 +74,8 @@ class ListParserTests(unittest.TestCase):
 
 class SearchTests(unittest.TestCase):
     def test_list_then_details_for_matching_offers_into_the_store(self):
-        pages = {"https://katowice.nieruchomosci-online.pl/w/": NO_LIST,
+        no_positions = NO_LIST[:NO_LIST.index("<script>")] + "</body></html>"
+        pages = {"https://katowice.nieruchomosci-online.pl/w/": no_positions,
                  "https://katowice.nieruchomosci-online.pl/mieszkanie,z-ogrodem/26900001.html": tp.NO_HTML}
         fetched, sleeps = [], []
 
@@ -87,6 +99,20 @@ class SearchTests(unittest.TestCase):
         self.assertIsNotNone(saved["lat"])                       # position from the listing page
         self.assertEqual(saved["cena"], 839000.0)                # the listing page wins over the list (it is more complete)
         self.assertTrue(all(s == 3.0 for s in sleeps))
+
+    def test_no_detail_requests_when_the_list_has_positions(self):
+        fetched = []
+
+        def fetch(url):
+            fetched.append(url)
+            return 200, NO_LIST
+
+        with tempfile.TemporaryDirectory() as d:
+            report = listy.search("nieruchomosci-online", "https://katowice.nieruchomosci-online.pl/w/",
+                                  os.path.join(d, "o.sqlite"), max_pages=1, fetch_page=fetch, sleep=lambda s: None,
+                                  today=date(2026, 10, 29))
+        self.assertEqual(fetched, ["https://katowice.nieruchomosci-online.pl/w/"])
+        self.assertEqual((report["pasuje"], report["ze_szczegolami"], report["bez_polozenia"]), (2, 0, 0))
 
     def test_refusal_stops_and_keeps_what_was_read(self):
         def fetch(url):

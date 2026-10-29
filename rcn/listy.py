@@ -15,6 +15,7 @@ Usage on the Pi:
   python3 rcn/listy.py szukaj --portal morizon --url "STRONA_WYNIKÓW" --metraz-od 100
 """
 import argparse
+import json
 import os
 import re
 import sys
@@ -124,8 +125,59 @@ def _item(portal: str, url: str, title: Optional[str], price, area) -> Dict[str,
     return offer
 
 
+def _json_object_after(text: str, marker: str) -> Optional[Dict[str, Any]]:
+    """The JSON object literal that follows `marker` in a script (braces matched outside strings)."""
+    start = text.find(marker)
+    start = text.find("{", start) if start >= 0 else -1
+    if start < 0:
+        return None
+    depth, in_string, escape = 0, False, False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i + 1])
+                except ValueError:
+                    return None
+    return None
+
+
+def _no_tiles_data(html: str) -> Dict[str, Dict[str, Any]]:
+    """Offer id -> position, market and investment from the list page's `tilesData` (keys a<id> or i<inv>_<id>)."""
+    out = {}
+    data = _json_object_after(html, "tilesData:") or {}
+    for key, tile in data.items():
+        match = re.match(r"^(?:a|i(\d+)_)(\d+)$", key)
+        if not match or not isinstance(tile, dict):
+            continue
+        position = tile.get("map") or {}
+        inaccurate = position.get("inaccurateLocation", position.get("isInaccurateLocation"))
+        out[match.group(2)] = {
+            "lat": portale.to_number(position.get("latitude")), "lon": portale.to_number(position.get("longitude")),
+            "lokalizacja_przyblizona": str(inaccurate) in ("1", "true", "True"),
+            "rynek": {"secondary": "wtorny", "primary": "pierwotny"}.get(tile.get("market")),
+            "inwestycja_id": match.group(1)}
+    return out
+
+
 def parse_no_list(html: str, city_url: str = "https://katowice.nieruchomosci-online.pl") -> List[Dict[str, Any]]:
-    """Tiles of a Nieruchomosci-online result page; investments (link ending with "?") and other cities left out."""
+    """Tiles of a Nieruchomosci-online result page; investments (link ending with "?") and other cities left out.
+
+    Positions, market and investment come from the page's `tilesData` script, so no listing page is needed."""
+    tiles = _no_tiles_data(html)
     root = tree(html)
     out = []
     for tile in root.find_all(has_class("tile")):
@@ -140,7 +192,11 @@ def parse_no_list(html: str, city_url: str = "https://katowice.nieruchomosci-onl
         spans = [s.text() for s in box.find_all(lambda n: n.tag == "span")] if box else []
         price = _number(spans[0]) if spans else None
         area = _number(spans[1]) if len(spans) > 1 else None
-        out.append(_item("nieruchomosci-online", url, link.text(), price, area))
+        item = _item("nieruchomosci-online", url, link.text(), price, area)
+        extra = tiles.get(item["id"] or "")
+        if extra:
+            item.update({k: v for k, v in extra.items() if v is not None})
+        out.append(item)
     return out
 
 
@@ -198,7 +254,8 @@ def _passes(o: Dict[str, Any], area_min, area_max, price_max) -> bool:
 
 def search(portal: str, url: str, db_path: str, area_min: Optional[float] = None, area_max: Optional[float] = None,
            price_max: Optional[float] = None, max_pages: int = 5, max_details: int = 40, pause: float = 3.0,
-           fetch_page=fetch, sleep=time.sleep, today: Optional[date] = None) -> Dict[str, Any]:
+           fetch_page=fetch, sleep=time.sleep, today: Optional[date] = None,
+           all_details: bool = False) -> Dict[str, Any]:
     """Read result pages, then the listing page of each matching offer; store everything read. Returns a report."""
     parse = PARSERS[portal]
     city = "{0.scheme}://{0.netloc}".format(urllib.parse.urlsplit(url))
@@ -225,8 +282,10 @@ def search(portal: str, url: str, db_path: str, area_min: Optional[float] = None
         seen.update((i["portal"], i["id"]) for i in fresh)
         listed.extend(fresh)
     matching = [o for o in listed if _passes(o, area_min, area_max, price_max)]
+    # A listing page only for offers the list left without a position (or for all, when asked).
+    need = matching if all_details else [o for o in matching if o.get("lat") is None or o.get("lon") is None]
     detailed = []
-    for o in matching[:max_details]:
+    for o in need[:max_details]:
         status, html = get(o["url"])
         if status != 200 or html is None:
             note = note or "%s odmówił strony ogłoszenia: HTTP %d. Pozostałe bez szczegółów." % (portal, status)
@@ -261,9 +320,11 @@ def main(argv=None) -> int:
     s.add_argument("--max-stron", type=int, default=5)
     s.add_argument("--max-szczegolow", type=int, default=40, help="ile stron ogłoszeń pobrać (po jednej na ofertę)")
     s.add_argument("--pauza", type=float, default=3.0)
+    s.add_argument("--szczegoly-wszystkie", action="store_true",
+                   help="pobierz stronę ogłoszenia także dla ofert z położeniem z listy (pokoje, wzmianki)")
     args = p.parse_args(argv)
     report = search(args.portal, args.url, args.oferty_db, args.metraz_od, args.metraz_do, args.cena_do,
-                    args.max_stron, args.max_szczegolow, args.pauza)
+                    args.max_stron, args.max_szczegolow, args.pauza, all_details=args.szczegoly_wszystkie)
     print("%s: na liście %d ofert, pasuje do filtrów %d, pobrano szczegóły %d, nowych %d, bez położenia %d" % (
         args.portal, report["na_liscie"], report["pasuje"], report["ze_szczegolami"], report["nowe"],
         report["bez_polozenia"]))

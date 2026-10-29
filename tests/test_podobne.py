@@ -137,3 +137,20 @@ class AreaSearchTests(unittest.TestCase):
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]["liczba"], 3)
         self.assertIsNone(groups[0]["inwestycja"])
+
+
+class InvestmentIdTests(unittest.TestCase):
+    def test_units_with_one_investment_id_grouped_even_at_different_points(self):
+        units = []
+        for i in range(3):
+            u = offer("nieruchomosci-online", "n%d" % i, 100.0, 1000000 + 30000 * i, tk.LAT + i * 0.001, tk.LON)
+            u["inwestycja_id"] = "46289"
+            units.append(u)
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "o.sqlite")
+            store = OfferStore(db)
+            store.upsert(units, "2026-10-29")
+            store.close()
+            groups = podobne.group_offers(podobne.offers_in_area(db, [], CENTER, 2000.0))
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["inwestycja"], "inwestycja nr 46289 (nieruchomosci-online)")

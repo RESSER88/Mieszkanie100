@@ -233,7 +233,9 @@ def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]
     arr = blocks.get("json___NUXT_DATA__")
     if not isinstance(arr, list):
         return None
-    listing = devalue_find_first(arr, {"area", "price", "numberOfRooms"})
+    # Gratka and Morizon share a platform; Morizon's record has no numberOfRooms key.
+    listing = devalue_find_first(arr, {"area", "price", "numberOfRooms"}) or \
+        devalue_find_first(arr, {"area", "price", "priceM2"})
     if not listing:
         return None
     offer["cena"] = to_number(listing.get("price"))
@@ -246,8 +248,10 @@ def _from_gratka(offer: Dict[str, Any], blocks: Dict[str, Any]) -> Optional[str]
     location = listing.get("location")
     offer["ulica"] = _find_key(location, r"street")
     offer["miejscowosc"], offer["dzielnica"] = _places(_find_key(location, r"location|city|locality"))
-    offer["lat"] = to_number(_find_key(listing, r"lat(itude)?"))
-    offer["lon"] = to_number(_find_key(listing, r"lon(gitude)?|lng"))
+    center = _find_key(listing, r"center")       # the map centre, not the map bounds (northeast, southwest)
+    where = center if isinstance(center, dict) else listing
+    offer["lat"] = to_number(_find_key(where, r"lat(itude)?"))
+    offer["lon"] = to_number(_find_key(where, r"lon(gitude)?|lng"))
     details = listing.get("buildingDetailedInformation")
     for item in details if isinstance(details, list) else []:
         if isinstance(item, dict) and "rok budowy" in str(item.get("label", "")).lower():
@@ -349,7 +353,7 @@ def parse_listing(html: str, url: str) -> Dict[str, Any]:
             other[kind] = data
     meta = dict(parser.meta)
     description = None
-    if offer["portal"] == "gratka":
+    if offer["portal"] in ("gratka", "morizon"):
         description = _from_gratka(offer, other)
     elif offer["portal"] == "otodom":
         description = _from_otodom(offer, other)
