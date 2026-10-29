@@ -318,3 +318,9 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && python3 rcn/olx.py szukaj && p
 ```bash
 cd /mnt/nas/projects/mieszkanie100 && git pull && cd ref/osm && osmium tags-filter slaskie-latest.osm.pbf nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link,secondary,secondary_link w/railway=rail,tram nwr/aeroway=aerodrome nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant nwr/landuse=industrial,landfill,quarry -o otoczenie-slask.osm.pbf --overwrite && osmium export otoczenie-slask.osm.pbf -f geojsonseq --add-unique-id=type_id -o otoczenie-slask.geojsonseq --overwrite && cd ../.. && python3 rcn/otoczenie.py import --geojsonseq ref/osm/otoczenie-slask.geojsonseq --osm-db osm_slask.sqlite && python3 rcn/mapa.py
 ```
+
+### Linie PSE niewidoczne na mapie (2026-10-29)
+
+- Zgłoszenie: linie PSE są w danych OSM i dobrze oznaczone, ale nie widać ich na mapie. Przyczyna w kodzie: mapa i tabela brały obiekty tylko do 3 km od oferty, a najbliższa linia 220–400 kV bywa dalej. Druga możliwa przyczyna: baza OSM wczytana przed podziałem na 110 kV i 220–400 kV.
+- Poprawka: linie 110 kV i 220–400 kV są szukane i rysowane do 10 km (`GRID_RADIUS_M` w `rcn/mapa.py`); w tabeli „Otoczenie” widać odległość do najbliższej, a kliknięcie wiersza przybliża mapę do niej.
+- Diagnoza na Pi (liczby linii w bazie wg rodzaju, ile ma operatora PSE, odległość od dwóch ulic): polecenie w odpowiedzi z 2026-10-29, wynik do dopisania tutaj.

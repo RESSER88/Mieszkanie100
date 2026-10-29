@@ -464,7 +464,8 @@ function renderAround(d) {
   $("around").innerHTML = `<p class="note">Kliknij wiersz, żeby wyróżnić ten rodzaj na mapie.
     <button type="button" class="linkish" id="show-all" hidden>Pokaż wszystko</button></p>` + out.join("") +
     `<p class="note">OpenStreetMap to dane społeczności: brak obiektu w danych nie znaczy, że go nie ma.
-     Linie i drogi są rysowane w całości do ${zl(d.promien_otoczenia_m)} m, pozostałe obiekty do 1 km.</p>`;
+     Linie energetyczne 110–400 kV są szukane do ${zl(d.promien_sieci_m)} m, kolej i drogi rysowane w całości do
+     ${zl(d.promien_otoczenia_m)} m, pozostałe obiekty do 1 km.</p>`;
 }
 
 function renderSales(d) {

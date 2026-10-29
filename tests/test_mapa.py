@@ -86,6 +86,26 @@ class CardJsonTests(unittest.TestCase):
         self.assertIsNone(near["kolej"]["odleglosc_m"])
         self.assertEqual(body["budynek"]["powod"], "położenie oferty jest przybliżone")
 
+    def test_power_lines_up_to_10_km(self):
+        import json as _json
+        seq = os.path.join(self.tmp.name, "far.geojsonseq")
+        far = tk.LAT + 6000 / 111200.0             # a 400 kV line 6 km north: outside the 3 km surroundings
+        with open(seq, "w", encoding="utf-8") as f:
+            f.write("\x1e" + _json.dumps({"type": "Feature", "id": "w9", "properties": {"power": "line",
+                    "voltage": "400000", "operator": "PSE"}, "geometry": {"type": "LineString", "coordinates": [
+                        [tk.LON - 0.01, far], [tk.LON + 0.01, far]]}}) + "\n")
+            f.write("\x1e" + _json.dumps({"type": "Feature", "id": "n9", "properties": {"amenity": "school"},
+                    "geometry": {"type": "Point", "coordinates": [tk.LON, far]}}) + "\n")
+        oz.import_geojsonseq(seq, self.ctx.osm_db)
+        status, body = mapa.card_json(self.ctx, {"ulica": "Szurmana", "cena": "839000", "metraz": "65"})
+        drawn = [o for o in body["otoczenie"] if o["kategoria"] == "linia_najwyzsza"]
+        self.assertEqual(len(drawn), 1)
+        self.assertTrue(drawn[0]["pse"])
+        near = {c["kategoria"]: c for c in body["otoczenie_lista"]}
+        self.assertAlmostEqual(near["linia_najwyzsza"]["odleglosc_m"], 5940, delta=30)
+        self.assertIsNone(near["szkola"]["odleglosc_m"])             # schools stay within 3 km
+        self.assertEqual(body["promien_sieci_m"], 10000)
+
     def test_only_portal_links_are_fetched(self):
         for link in ("http://192.168.1.1/admin", "file:///etc/passwd", "https://otodom.pl.evil.com/x",
                      "https://example.com/oferta"):

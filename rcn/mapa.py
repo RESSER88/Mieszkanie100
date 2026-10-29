@@ -31,6 +31,9 @@ MAP_OSM_PER_CATEGORY = 40      # at most this many per category inside MAP_OSM_R
 FULL_RADIUS = {"linia_najwyzsza", "linia_wn", "stacja_energetyczna", "kolej", "droga_glowna", "lotnisko",
                "droga_w_budowie", "droga_planowana"}
 FULL_RADIUS_CAP = 600          # ways per category, a guard for dense road networks
+# Power lines are sparse and matter from afar, so they are looked up further than the rest.
+GRID = ("linia_najwyzsza", "linia_wn")
+GRID_RADIUS_M = 10000.0
 SIMPLIFY_M = 3.0               # shapes are simplified to this tolerance before sending to the phone
 MARKET_TEXT = {"rynekWtorny": "wtórny", "rynekPierwotny": "pierwotny"}
 # Groups for the page and the map legend: what to avoid, roads that will change, what a family uses daily.
@@ -166,6 +169,11 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
         try:
             card = karta.build_card(offer, rcn, osm, radius, months, today=ctx.today, ages=ctx.ages)
             items = otoczenie.nearby(osm, card["srodek"], card["promien_otoczenia_m"], geometry=True) if osm else []
+            if osm is not None:
+                seen = {i["id"] for i in items}
+                items += [i for i in otoczenie.nearby(osm, card["srodek"], GRID_RADIUS_M, GRID, geometry=True)
+                          if i["id"] not in seen]
+                items.sort(key=lambda i: i["odleglosc_m"])
         finally:
             rcn.close()
             if osm is not None:
@@ -192,6 +200,7 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
         "porownania": [{"etykieta": label, **_summary(s)} for label, s in card["porownanie"]],
         "otoczenie_lista": _nearest_by_category(items),
         "promien_otoczenia_m": card["promien_otoczenia_m"],
+        "promien_sieci_m": GRID_RADIUS_M,
         "podobne": similar,
         "srodek": _latlon(*card["srodek"]),
         "przyblizone": not card["polozenie_dokladne"],
