@@ -87,3 +87,21 @@ class SortTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeveloperSignalTests(unittest.TestCase):
+    def test_signals(self):
+        self.assertTrue(filtry.is_developer(o(1, inwestycja="Ogrody")))
+        self.assertTrue(filtry.is_developer(o(1, inwestycja_id="46289")))
+        self.assertTrue(filtry.is_developer(o(1, rynek="pierwotny")))
+        self.assertTrue(filtry.is_developer(o(1, deweloper=True)))
+        for title in ("Nowe mieszkanie 3 pok. od dewelopera", "Bezpośrednio od DEWELOPERA, 0% prowizji",
+                      "Apartament, inwestycja Franciszkańska, oddanie w 2027", "Mieszkanie bez PCC, Ligota"):
+            self.assertTrue(filtry.is_developer(o(1, tytul=title)), title)
+        self.assertFalse(filtry.is_developer(o(1, tytul="Mieszkanie po remoncie, Ligota")))
+
+    def test_hide_uses_every_signal(self):
+        latest = {"olx": "2026-10-29"}
+        f = filtry.parse({"deweloperzy": "ukryj"})
+        self.assertFalse(filtry.keep(o(1, tytul="Nowe mieszkanie od dewelopera"), f, latest, TODAY))
+        self.assertTrue(filtry.keep(o(2, tytul="Mieszkanie po remoncie"), f, latest, TODAY))

@@ -76,7 +76,7 @@ def _unique(candidates, limit: Optional[int]) -> List[Dict[str, Any]]:
                        "cena_m2": o.get("cena_m2"), "rynek": o.get("rynek"), "inwestycja": o.get("inwestycja"),
                        "pokoje": o.get("pokoje"), "pietro": o.get("pietro"), "ulica": o.get("ulica"),
                        "zabudowa": o.get("zabudowa"), "dzielnica": o.get("dzielnica"),
-                       "inwestycja_id": o.get("inwestycja_id"),
+                       "inwestycja_id": o.get("inwestycja_id"), "deweloper": o.get("deweloper"),
                        "odleglosc_m": round(distance), "polozenie": where, "punkt": [round(lat, 6), round(lon, 6)],
                        "pierwszy_raz": first, "ostatnio": last, "takze_na": [], "_oferta": o})
     for c in chosen:
@@ -110,6 +110,41 @@ def _norm(text: Optional[str]) -> str:
     return " ".join((text or "").casefold().split())
 
 
+MERGE_M = 150.0     # developer groups this close are one development listed on several portals
+
+
+def _merge_developments(groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Join developer groups (any portal) whose points are within MERGE_M; the first real investment name wins."""
+    from rcn import filtry      # late import: filtry has no dependency on this module
+    out: List[Dict[str, Any]] = []
+    for g in groups:
+        dev = any(filtry.is_developer(o) for o in g["oferty"])
+        target = None
+        if dev:
+            for h in out:
+                if h.get("_dev") and _metres(g["punkt"], h["punkt"]) <= MERGE_M:
+                    target = h
+                    break
+        if target is None:
+            g["_dev"] = dev
+            out.append(g)
+            continue
+        target["oferty"].extend(g["oferty"])
+        if not target.get("inwestycja") or target["inwestycja"].startswith("inwestycja nr "):
+            if g.get("inwestycja") and not g["inwestycja"].startswith("inwestycja nr "):
+                target["inwestycja"] = target["nazwa"] = g["inwestycja"]
+        target["odleglosc_m"] = min(target["odleglosc_m"], g["odleglosc_m"])
+    for g in out:
+        if g.pop("_dev") and len(g["oferty"]) > 1 and not g.get("inwestycja"):
+            g["inwestycja"] = g["nazwa"] = "inwestycja deweloperska (bez nazwy w ogłoszeniach)"
+    return out
+
+
+def _metres(a, b) -> float:
+    pa, pb = otoczenie.wgs84_to_pl1992(a[0], a[1]), otoczenie.wgs84_to_pl1992(b[0], b[1])
+    return math.hypot(pa[0] - pb[0], pa[1] - pb[1])
+
+
 def group_offers(offers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Developer listings sell many units in one building: units of one investment (or at one point) as one group.
 
@@ -131,8 +166,9 @@ def group_offers(offers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                                "punkt": o["punkt"], "odleglosc_m": o["odleglosc_m"], "polozenie": o["polozenie"],
                                "oferty": []}
         g["oferty"].append(o)
+    merged = _merge_developments(list(groups.values()))
     out = []
-    for g in groups.values():
+    for g in merged:
         def span(field):
             values = [o[field] for o in g["oferty"] if o.get(field) is not None]
             return (min(values), max(values)) if values else (None, None)

@@ -100,6 +100,14 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((o["pietro"], o["pokoje"]), (11, 10))
         self.assertIn("cena", o["brakuje"])
 
+    def test_developer_advertiser_marked_without_its_name(self):
+        item = ad(5)
+        item["agency"] = {"name": "Deweloper ABC Sp. z o.o.", "type": "DEVELOPER"}
+        offer = otodom.parse_item(item)[0]
+        self.assertTrue(offer["deweloper"])
+        self.assertNotIn("ABC", json.dumps(offer, ensure_ascii=False))
+        self.assertFalse(otodom.parse_item(ad(6))[0]["deweloper"])          # an agency, not a developer
+
     def test_no_seller_or_agency_data(self):
         text = json.dumps(otodom.parse_item(ad(4)), ensure_ascii=False)
         self.assertNotIn("Biuro XYZ", text)

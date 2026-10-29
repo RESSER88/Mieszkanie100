@@ -27,3 +27,14 @@ flatscraper obsługuje cztery portale: Otodom, OLX, Nieruchomosci-online i Moriz
 - Inwestycje deweloperów na Nieruchomosci-online (link kończący się na „?”) są pomijane, jak u flatscraper; lokale inwestycji z Otodom są w bazie osobno.
 - OLX: `--metraz-od` i `--metraz-do` idą teraz do OLX jako `filter_float_m:from` i `filter_float_m:to` (nazwa z adresu wyszukiwania OLX, potwierdzona u flatscraper). Gdyby OLX odrzucił filtr błędem, pierwsza strona jest raz pobierana bez niego; filtr lokalny działa zawsze.
 - Selektory nie są sprawdzone na stronach dla Katowic. Najpierw `bash scripts/portale_probe.sh "STRONA_WYNIKÓW"`.
+
+## Deweloperzy z nowymi mieszkaniami na wszystkich portalach (2026-10-29)
+
+Prośba użytkownika: móc pominąć deweloperów albo znaleźć tylko ich; ich oferty są na każdym portalu.
+
+- Rozpoznanie dewelopera (`filtry.is_developer`), wystarczy jeden sygnał: nazwa inwestycji (Otodom), numer inwestycji (Nieruchomosci-online, klucz `i<numer>_` w `tilesData`), rynek pierwotny, ogłoszeniodawca typu „DEVELOPER” w wynikach Otodom (czytany jest tylko typ, bez nazwy i kontaktów) albo słowa w tytule: „od dewelopera”, „nowe mieszkanie”, „0% prowizji”, „bez PCC” (podatek PCC nie dotyczy rynku pierwotnego), „inwestycja”, „oddanie w”, „stan deweloperski”, „rynek pierwotny”. Sygnał z tytułu działa od razu na zapisanych ofertach; typ ogłoszeniodawcy Otodom pojawi się po następnym `rcn/otodom.py szukaj`.
+- Jedna inwestycja na kilku portalach: grupy deweloperskie w odległości do 150 m są łączone w jedną pozycję (jeden znacznik, jeden wiersz, lista portali); nazwa z ogłoszenia ma pierwszeństwo, a bez nazwy pozycja nazywa się „inwestycja deweloperska (bez nazwy w ogłoszeniach)”.
+- Filtr „Deweloperzy” jest w głównych filtrach: „pokaż, zgrupowane w inwestycje”, „pomiń deweloperów”, „tylko deweloperzy (nowe mieszkania)”.
+- Dymki ofert: przycisk „Otwórz ogłoszenie” obok „Trasa stąd”; dymek inwestycji ma listę lokali z linkami i przycisk „Wszystkie lokale w liście”.
+- Czytelność mapy: podpisy przy najbliższym obiekcie każdego ważnego rodzaju z odległością (np. „110 kV, 1,5 km”, „Przedszkole nr 1, 330 m”), białe obwódki pod cienkimi liniami, legenda domyślnie zwinięta.
+- Baza OSM jednym poleceniem: `bash scripts/osm_odswiez.sh` (z `--pobierz` także świeży plik z Geofabrik).

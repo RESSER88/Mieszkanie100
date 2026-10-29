@@ -154,3 +154,26 @@ class InvestmentIdTests(unittest.TestCase):
             groups = podobne.group_offers(podobne.offers_in_area(db, [], CENTER, 2000.0))
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]["inwestycja"], "inwestycja nr 46289 (nieruchomosci-online)")
+
+
+class CrossPortalDevelopmentTests(unittest.TestCase):
+    def test_one_development_listed_on_three_portals_is_one_group(self):
+        north = lambda m: tk.LAT + m / 111200.0    # noqa: E731
+        a = offer("otodom", "o1", 70.0, 900000, north(500), tk.LON)
+        a.update(inwestycja="Ogrody Panewnickie", rynek="pierwotny")
+        b = offer("nieruchomosci-online", "n1", 55.0, 700000, north(560), tk.LON)       # 60 m away, other unit
+        b.update(inwestycja_id="46289", rynek="pierwotny")
+        c = offer("olx", "x1", 82.0, 1050000, north(620), tk.LON)
+        c.update(tytul="Nowe mieszkanie od dewelopera", lokalizacja_przyblizona=True)
+        far = offer("olx", "x2", 60.0, 650000, north(900), tk.LON)                      # second-hand, 400 m on
+        with tempfile.TemporaryDirectory() as d:
+            db = os.path.join(d, "o.sqlite")
+            store = OfferStore(db)
+            store.upsert([a, b, c, far], "2026-10-29")
+            store.close()
+            groups = podobne.group_offers(podobne.offers_in_area(db, [], CENTER, 2000.0))
+        dev = [g for g in groups if g["liczba"] > 1]
+        self.assertEqual(len(dev), 1)
+        self.assertEqual(dev[0]["inwestycja"], "Ogrody Panewnickie")
+        self.assertEqual(dev[0]["portale"], ["nieruchomosci-online", "olx", "otodom"])
+        self.assertEqual(len(groups), 2)

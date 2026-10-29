@@ -103,6 +103,7 @@
            padding: 0; min-width: 0; }
   .f { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; }
   .f select, .f input { width: 100%; min-height: 44px; padding: 8px 10px; }
+  .f.wide { grid-column: 1 / -1; }
   .f.range { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
   .f.range > span { grid-column: 1 / -1; }
   fieldset.fgrid legend, fieldset.chips legend { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--ink);
@@ -334,6 +335,9 @@
       <div class="f range" role="group" aria-label="Cena w zł"><span>Cena, zł</span>
         <input name="cena_od" form="fs" inputmode="numeric" placeholder="od" aria-label="cena od">
         <input name="cena_do" form="fs" inputmode="numeric" placeholder="do" aria-label="cena do"></div>
+      <label class="f wide">Deweloperzy
+        <select name="deweloperzy" form="fs"><option value="grupuj">pokaż, zgrupowane w inwestycje</option>
+          <option value="ukryj">pomiń deweloperów</option><option value="tylko">tylko deweloperzy (nowe mieszkania)</option></select></label>
     </div>
     <details class="more" id="more">
       <summary>Więcej filtrów<span id="more-count" class="badge" hidden></span></summary>
@@ -350,9 +354,7 @@
         <label class="f">Rynek
           <select name="rynek" form="fs"><option value="">dowolny</option><option value="wtorny">wtórny</option>
             <option value="pierwotny">pierwotny</option></select></label>
-        <label class="f">Deweloperzy
-          <select name="deweloperzy" form="fs"><option value="grupuj">grupuj w inwestycje</option>
-            <option value="ukryj">ukryj</option><option value="tylko">tylko oni</option></select></label>
+
         <label class="f">Nowe z ostatnich
           <select name="nowe_dni" form="fs"><option value="">dowolnie</option><option value="1">1 dnia</option>
             <option value="3">3 dni</option><option value="7">7 dni</option><option value="14">14 dni</option>
@@ -1091,7 +1093,7 @@ $("fs").addEventListener("submit", ev => {
 });
 
 // One line that says what is filtered, so the folded panel still tells the truth.
-const MAIN = new Set(["promien", "sortuj", "metraz_od", "metraz_do", "cena_od", "cena_do"]);
+const MAIN = new Set(["promien", "sortuj", "metraz_od", "metraz_do", "cena_od", "cena_do", "deweloperzy"]);
 function filterSummary() {
   const el = $("fs").elements, v = n => (el[n] && el[n].value || "").trim();
   const parts = [el.promien.selectedOptions[0].textContent];

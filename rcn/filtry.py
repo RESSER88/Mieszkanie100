@@ -7,6 +7,7 @@ first and last seen. A filter that is set rejects an offer whose value is unknow
 shown to match); an unset filter never rejects. Distances to nuisances are applied separately
 in rcn/mapa.py, because they need the OSM database. Standard library only.
 """
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Set
@@ -105,8 +106,17 @@ def _in_range(value, low, high) -> bool:
     return (low is None or value >= low) and (high is None or value <= high)
 
 
+# Words that mark a developer listing in a title (OLX and Morizon often give no market): "od dewelopera", "nowe
+# mieszkanie", "0% prowizji", "bez PCC" (no transfer tax only on the primary market), "inwestycja", "oddanie w",
+# "stan deweloperski". A private seller rarely writes these.
+_DEVELOPER_WORDS = re.compile(r"od dewelopera|nowe mieszkani|0\s*% prowizji|bez pcc|inwestycj|oddanie w|"
+                              r"stan deweloperski|rynek pierwotny", re.I)
+
+
 def is_developer(offer: Dict[str, Any]) -> bool:
-    return bool(offer.get("inwestycja")) or offer.get("rynek") == "pierwotny"
+    """Any one signal is enough: investment name or id, primary market, a developer advertiser, or the title."""
+    return bool(offer.get("inwestycja") or offer.get("inwestycja_id") or offer.get("deweloper")
+                or offer.get("rynek") == "pierwotny" or _DEVELOPER_WORDS.search(offer.get("tytul") or ""))
 
 
 def keep(offer: Dict[str, Any], f: Filters, latest: Dict[str, str], today: date) -> bool:

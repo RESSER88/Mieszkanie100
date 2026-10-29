@@ -96,6 +96,9 @@ def _single(item: dict, development: Optional[str], primary: bool) -> Dict[str, 
         "rynek": "pierwotny" if primary else None, "ulica": street.get("name"),
         "miejscowosc": places.get("city_or_village"), "dzielnica": places.get("district"),
         "inwestycja": development or item.get("developmentTitle") or None,
+        # Only whether the advertiser is a developer; its name and contacts are not read.
+        "deweloper": bool(primary or item.get("developmentId")
+                          or str((item.get("agency") or {}).get("type") or "").upper() == "DEVELOPER"),
     })
     if offer["cena_m2"] is None and price and area:
         offer["cena_m2"] = round(price / area, 2)
