@@ -175,6 +175,8 @@ def _portal_and_id(url: str):
         portal = "gratka"
     elif host.endswith("otodom.pl"):
         portal = "otodom"
+    elif host.endswith("morizon.pl"):
+        portal = "morizon"
     else:
         portal = host
     numbers = re.findall(r"\d{5,}", parts.path)

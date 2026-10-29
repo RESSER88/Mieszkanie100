@@ -18,3 +18,12 @@ Prośba użytkownika: wybrać miejsce (najlepiej pinezką) albo wziąć je z pod
 - **Morizon:** ten sam projekt: karty `data-cy="card"`, współrzędne w `window.__INITIAL_STATE__`.
 - **OLX:** flatscraper używa w adresie wyszukiwania `search[filter_float_m:from]=60`, co potwierdza nazwę filtra metrażu dla przyspieszenia `rcn/olx.py`.
 - **mScanner, nowe inwestycje:** znane API daje agregaty cen; czy jest lista inwestycji z położeniem, nie wiadomo (strona zablokowana w chmurze). Rozpoznanie na Pi.
+
+## Wszystkie portale z flatscraper (2026-10-29)
+
+flatscraper obsługuje cztery portale: Otodom, OLX, Nieruchomosci-online i Morizon (w pliku Dockerfile także adres Gratki, bez czytnika w kodzie). Otodom i OLX już mamy. Dodane:
+
+- `rcn/listy.py szukaj --portal nieruchomosci-online|morizon --url "STRONA_WYNIKÓW"`: czyta strony wyników (kafelki Nieruchomosci-online, karty Morizon, selektory z flatscraper), filtruje metraż i cenę, a dla pasujących ofert pobiera stronę ogłoszenia (domyślnie najwyżej 40, pauza 3 s), bo listy nie mają współrzędnych. Strona ogłoszenia jest czytana przez `rcn/portale.py`, więc oferta ma położenie, pokoje, rynek i wzmianki (ogród, taras). Strona ogłoszenia ma pierwszeństwo przed danymi z listy. Pierwsza odmowa kończy pobieranie.
+- Inwestycje deweloperów na Nieruchomosci-online (link kończący się na „?”) są pomijane, jak u flatscraper; lokale inwestycji z Otodom są w bazie osobno.
+- OLX: `--metraz-od` i `--metraz-do` idą teraz do OLX jako `filter_float_m:from` i `filter_float_m:to` (nazwa z adresu wyszukiwania OLX, potwierdzona u flatscraper). Gdyby OLX odrzucił filtr błędem, pierwsza strona jest raz pobierana bez niego; filtr lokalny działa zawsze.
+- Selektory nie są sprawdzone na stronach dla Katowic. Najpierw `bash scripts/portale_probe.sh "STRONA_WYNIKÓW"`.

@@ -48,9 +48,9 @@ class OlxClient:
         self.url, self.timeout, self.sleep = url, timeout, sleep
 
     def fetch_page(self, city_id: int, region_id: int, offset: int, category_id: str = CATEGORY_SALE,
-                   limit: int = PAGE_SIZE) -> Tuple[List[dict], int]:
+                   limit: int = PAGE_SIZE, extra: Sequence[Tuple[str, Any]] = ()) -> Tuple[List[dict], int]:
         params = [("offset", offset), ("limit", limit), ("city_id", city_id), ("region_id", region_id),
-                  ("category_id", category_id)]
+                  ("category_id", category_id)] + list(extra)
         body = json.dumps({"operationName": "S", "query": QUERY,
                            "variables": {"p": [{"key": k, "value": str(v)} for k, v in params]}}).encode()
         request = urllib.request.Request(self.url, data=body, method="POST", headers={
@@ -69,17 +69,27 @@ class OlxClient:
         return result.get("data") or [], int((result.get("metadata") or {}).get("total_elements") or 0)
 
     def search_all(self, city_id: int, region_id: int, category_id: str = CATEGORY_SALE, pause: float = 3.0,
-                   max_pages: int = 30) -> Tuple[List[dict], int]:
+                   max_pages: int = 30, area_min: Optional[float] = None,
+                   area_max: Optional[float] = None) -> Tuple[List[dict], int]:
+        # The area filter uses the name OLX's own search address uses (search[filter_float_m:from], also in
+        # marcmos/flatscraper). If OLX ignores it, all offers come back and the local filter still applies.
+        extra = [(k, "%g" % v) for k, v in (("filter_float_m:from", area_min), ("filter_float_m:to", area_max))
+                 if v is not None]
         items: List[dict] = []
         total, offset = 0, 0
         for page in range(max_pages):
             if page:
                 self.sleep(pause)
             try:
-                data, total = self.fetch_page(city_id, region_id, offset, category_id)
+                data, total = self.fetch_page(city_id, region_id, offset, category_id, extra=extra)
             except OlxError as exc:
-                exc.partial = items
-                raise
+                if page == 0 and extra and str(exc).startswith("OLX zwrócił błąd"):
+                    extra = []        # OLX rejected the area filter: one retry without it, filtering stays local
+                    self.sleep(pause)
+                    data, total = self.fetch_page(city_id, region_id, offset, category_id)
+                else:
+                    exc.partial = items
+                    raise
             items.extend(data)
             offset += len(data)
             if not data or offset >= total:
@@ -245,7 +255,8 @@ def main(argv=None, today: Optional[date] = None) -> int:
     client = OlxClient(args.url)
     exit_code, note = 0, ""
     try:
-        raw, total = client.search_all(args.city_id, args.region_id, args.kategoria, args.pauza, args.max_stron)
+        raw, total = client.search_all(args.city_id, args.region_id, args.kategoria, args.pauza, args.max_stron,
+                                       area_min=args.metraz_od, area_max=args.metraz_do)
     except OlxError as exc:
         raw, total, exit_code = exc.partial, None, 1
         note = "UWAGA: %s. Wynik niepełny, nie ponawiać w pętli." % exc

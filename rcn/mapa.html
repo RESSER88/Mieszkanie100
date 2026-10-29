@@ -278,6 +278,8 @@
         <fieldset class="filters"><legend>Portale</legend>
           <label class="check"><input type="checkbox" name="portale" value="olx"> OLX</label>
           <label class="check"><input type="checkbox" name="portale" value="otodom"> Otodom</label>
+          <label class="check"><input type="checkbox" name="portale" value="nieruchomosci-online"> Nieruchomosci-online</label>
+          <label class="check"><input type="checkbox" name="portale" value="morizon"> Morizon</label>
           <span class="hint">nic nie zaznaczone: wszystkie</span></fieldset>
         <fieldset class="filters"><legend>Zabudowa (z OLX)</legend>
           <label class="check"><input type="checkbox" name="zabudowa" value="blok"> blok</label>
@@ -318,8 +320,9 @@
         <h2>Szukaj ofert w okolicy</h2>
         <p>Kliknij mapę, żeby postawić pinezkę (można ją przesunąć), albo wpisz ulicę lub wklej link do ogłoszenia.
            Ustaw metraż i inne filtry, potem „Szukaj ofert”.</p>
-        <p>Oferty pochodzą z zapisanych wyników wyszukiwania OLX i Otodom na Raspberry Pi, więc są tak świeże jak ostatnie
-           uruchomienie <code>rcn/olx.py szukaj</code> i <code>rcn/otodom.py szukaj</code>.</p>
+        <p>Oferty pochodzą z zapisanych wyników wyszukiwania (OLX, Otodom, Nieruchomosci-online, Morizon) na Raspberry Pi,
+           więc są tak świeże jak ostatnie uruchomienie <code>rcn/olx.py szukaj</code>, <code>rcn/otodom.py szukaj</code>
+           i <code>rcn/listy.py szukaj</code>.</p>
       </section>
     </div>
     <div id="s-result" hidden>

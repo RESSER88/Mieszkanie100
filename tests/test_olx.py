@@ -42,7 +42,8 @@ def item(n, district="Ligota-Panewniki", m_label="120 m²", price=1300000, lat=5
 
 class FakeGraphql:
     def __init__(self, items, fail_at_offset=None):
-        self.items, self.fail_at, self.requests = items, fail_at_offset, []
+        self.items, self.fail_at, self.requests, self.params = items, fail_at_offset, [], []
+        self.reject_filter = False
         outer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -54,6 +55,15 @@ class FakeGraphql:
                 params = {p["key"]: p["value"] for p in body["variables"]["p"]}
                 offset, limit = int(params["offset"]), int(params["limit"])
                 outer.requests.append((offset, self.headers.get("User-Agent")))
+                outer.params.append(params)
+                if outer.reject_filter and "filter_float_m:from" in params:
+                    raw = json.dumps({"data": {"clientCompatibleListings": {"__typename": "ListingError",
+                                                                            "error": {"code": 400}}}}).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
                 if outer.fail_at is not None and offset >= outer.fail_at:
                     self.send_response(403)
                     self.end_headers()
@@ -127,6 +137,27 @@ class SearchTests(unittest.TestCase):
                 client.search_all(city_id=7691, region_id=6)
             self.assertEqual(len(ctx.exception.partial), 40)
             self.assertEqual(len(srv.requests), 2)        # no retry loop
+        finally:
+            srv.close()
+
+    def test_area_filter_sent_to_olx(self):
+        srv = FakeGraphql([item(i) for i in range(5)])
+        try:
+            olx.OlxClient(srv.url, sleep=lambda s: None).search_all(7691, 6, area_min=100, area_max=140)
+            self.assertEqual(srv.params[0]["filter_float_m:from"], "100")
+            self.assertEqual(srv.params[0]["filter_float_m:to"], "140")
+            olx.OlxClient(srv.url, sleep=lambda s: None).search_all(7691, 6)
+            self.assertNotIn("filter_float_m:from", srv.params[-1])
+        finally:
+            srv.close()
+
+    def test_rejected_area_filter_retried_once_without_it(self):
+        srv = FakeGraphql([item(i) for i in range(5)])
+        srv.reject_filter = True
+        try:
+            items, total = olx.OlxClient(srv.url, sleep=lambda s: None).search_all(7691, 6, area_min=100)
+            self.assertEqual((len(items), total), (5, 5))
+            self.assertEqual(len(srv.requests), 2)
         finally:
             srv.close()
 
