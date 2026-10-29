@@ -204,6 +204,23 @@ class MapSelectionTests(unittest.TestCase):
         self.assertTrue(mapa._osm_for_map([item])[0]["pse"])
 
 
+class MapboxTokenTests(unittest.TestCase):
+    def test_public_token_goes_to_the_page(self):
+        page = mapa.render_page("pk.abc123")
+        self.assertIn('window.MAPBOX_TOKEN = "pk.abc123";', page)
+
+    def test_secret_or_odd_token_never_reaches_the_browser(self):
+        for token in ("sk.secret", "abc", "", None, 'pk.x";alert(1)//'):
+            page = mapa.render_page(mapa.public_token(token))
+            self.assertIn("window.MAPBOX_TOKEN = null;", page, token)
+            self.assertNotIn("sk.secret", page)
+            self.assertNotIn("alert(1)", page)
+
+    def test_public_token_check(self):
+        self.assertEqual(mapa.public_token("pk.eyJ1Ijoi.x-Y_z"), "pk.eyJ1Ijoi.x-Y_z")
+        self.assertIsNone(mapa.public_token("sk.eyJ1Ijoi"))
+
+
 class ServerTests(unittest.TestCase):
     def test_page_and_api_over_http(self):
         with tempfile.TemporaryDirectory() as d:

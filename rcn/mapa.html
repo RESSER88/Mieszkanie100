@@ -168,9 +168,12 @@
     .work { grid-template-columns: minmax(0, 1fr) minmax(300px, 42%); }
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
+    :root:not([data-theme="light"]) .osm-tiles { filter: brightness(.72) saturate(.75); }
   }
-  :root[data-theme="dark"] .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
+  :root[data-theme="dark"] .osm-tiles { filter: brightness(.72) saturate(.75); }
+  .route-btn { margin-top: 8px; min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .route-label { font: 600 12.5px/1.3 system-ui, sans-serif; color: var(--ink); background: var(--surface);
+                 border: 1px solid var(--line-2); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 
   /* Sections: a heading and a rule, no cards. */
   section { padding: 16px 0; border-bottom: 1px solid var(--line); }
@@ -415,6 +418,7 @@
     </div>
   </div>
 </main>
+<script>window.MAPBOX_TOKEN = null;</script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
@@ -465,10 +469,82 @@ const MARKET = {wtorny: "wtórny", pierwotny: "pierwotny"};
 const SHORT = {"Rynek wtórny, tylko budynki do 10 lat (szacunek z RCN)": "Wtórny, budynki do 10 lat"};
 
 const map = L.map("map", {zoomControl: true}).setView([50.2299, 18.9906], 13);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "&copy; autorzy OpenStreetMap (ODbL) | ceny: RCN, GUGiK"
-}).addTo(map);
-const control = L.control.layers(null, null, {collapsed: true}).addTo(map);
+// Base map: Mapbox light (dark in dark mode) when the Pi has a public token, else OpenStreetMap tiles.
+// A quiet base lets the data colours stand out; OpenStreetMap stays one click away in the layer menu.
+const TOKEN = typeof window.MAPBOX_TOKEN === "string" && /^pk\./.test(window.MAPBOX_TOKEN) ? window.MAPBOX_TOKEN : null;
+const SOURCES = "ceny: RCN, GUGiK";
+const osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, className: "osm-tiles", attribution: "&copy; autorzy OpenStreetMap (ODbL) | " + SOURCES});
+const bases = {"OpenStreetMap": osmTiles};
+if (TOKEN) {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
+  const style = dark ? "dark-v11" : "light-v11";
+  const mb = L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/512/{z}/{x}/{y}@2x?access_token=${TOKEN}`, {
+    maxZoom: 20, tileSize: 512, zoomOffset: -1,
+    attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">' +
+      'autorzy OpenStreetMap</a> <a href="https://www.mapbox.com/map-feedback/" target="_blank" rel="noopener">Popraw tę mapę</a> | ' + SOURCES});
+  bases["Mapbox, stonowana"] = mb;
+  mb.addTo(map);
+} else {
+  osmTiles.addTo(map);
+}
+const control = L.control.layers(bases, null, {collapsed: true}).addTo(map);
+
+// ---- Routes: from the offer (card) or the pin (search) to a clicked place; on foot up to 3 km, else by car ----
+const WALK_LIMIT_M = 3000;
+let routeLayer = L.layerGroup().addTo(map), popupAt = null;
+function routeButton() { return TOKEN ? `<br><button type="button" class="route-btn">Trasa stąd</button>` : ""; }
+function duration(sec) {
+  const min = Math.max(1, Math.round(sec / 60));
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+function length(m) { return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString("pl-PL", {maximumFractionDigits: 1})} km`; }
+async function directions(profile, a, b) {
+  const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${a.lng.toFixed(6)},${a.lat.toFixed(6)};` +
+    `${b.lng.toFixed(6)},${b.lat.toFixed(6)}?geometries=geojson&overview=full&alternatives=false&access_token=${TOKEN}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}` + (r.status === 401 || r.status === 403 ? " (sprawdź token i ograniczenie adresu w Mapbox)" : ""));
+  const d = await r.json();
+  if (!d.routes || !d.routes.length) throw new Error(d.message || "brak trasy");
+  return d.routes[0];
+}
+function routeOrigin() {
+  if (mode === "szukaj") return pin ? pin.getLatLng() : null;
+  return lastCenter ? L.latLng(lastCenter) : null;
+}
+async function showRoute(to, name) {
+  const from = routeOrigin(), st = $("status");
+  if (!from) { st.className = "err"; st.textContent = "Najpierw pokaż kartę oferty albo postaw pinezkę."; return; }
+  st.className = ""; st.textContent = "Wyznaczam trasę…";
+  routeLayer.clearLayers();
+  try {
+    const walk = await directions("walking", from, to);
+    let main = walk, how = "pieszo", note = "";
+    if (walk.distance > WALK_LIMIT_M) {
+      main = await directions("driving", from, to); how = "samochodem";
+      note = `, pieszo byłoby ${duration(walk.duration)} (${length(walk.distance)})`;
+    }
+    const ll = main.geometry.coordinates.map(c => [c[1], c[0]]);
+    L.polyline(ll, {color: css("--surface"), weight: 9, opacity: .9, interactive: false}).addTo(routeLayer);
+    const line = L.polyline(ll, {color: css("--ink"), weight: 5, dashArray: how === "pieszo" ? "1 8" : null, lineCap: "round"})
+      .addTo(routeLayer);
+    const text = `${name ? esc(name) + ": " : ""}${how} ${duration(main.duration)}, ${length(main.distance)}`;
+    line.bindTooltip(text + note, {permanent: true, direction: "top", className: "route-label"}).openTooltip(ll[Math.floor(ll.length / 2)]);
+    map.closePopup();
+    map.fitBounds(line.getBounds(), {padding: [40, 40], maxZoom: 17});
+    st.textContent = `Trasa ${how}: ${duration(main.duration)}, ${length(main.distance)}${note}. Źródło: Mapbox Directions.`;
+  } catch (e) {
+    st.className = "err"; st.textContent = "Mapbox nie wyznaczył trasy: " + e.message;
+  }
+}
+map.on("popupopen", ev => {
+  popupAt = ev.popup.getLatLng();
+  const btn = ev.popup.getElement().querySelector(".route-btn");
+  if (btn) btn.onclick = () => {
+    const title = ev.popup.getElement().querySelector(".leaflet-popup-content b");
+    showRoute(popupAt, title ? title.textContent.replace(/:$/, "") : "");
+  };
+});
 let layers = [], saleMarkers = [], similarMarkers = [], catLayers = {}, nearestLayer = {}, lit = null, lastCenter = null;
 
 const legend = L.control({position: "bottomright"});
@@ -500,6 +576,7 @@ legend.onAdd = () => {
 legend.addTo(map);
 
 function clearMap() {
+  routeLayer.clearLayers();
   layers.forEach(l => { map.removeLayer(l); control.removeLayer(l); });
   layers = []; saleMarkers = []; similarMarkers = [];
 }
@@ -529,7 +606,7 @@ function drawMap(d) {
   similarMarkers = d.podobne.map((p, i) => L.marker(p.punkt, {
       icon: L.divIcon({className: "sq", html: String(i + 1), iconSize: null})})
     .bindPopup(`<b>${i + 1}. ${esc(p.tytul || p.portal)}</b><br>${zl(p.cena)} zł, ${m2(p.powierzchnia_m2)} m², ${zl(p.cena_m2)} zł/m²<br>
-                ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>`));
+                ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>${routeButton()}`));
   if (similarMarkers.length) overlay(L.layerGroup(similarMarkers), "Podobne oferty");
   const groups = {};
   catLayers = {}; nearestLayer = {};
@@ -546,8 +623,8 @@ function drawMap(d) {
     parts.push(main);
     if (st.rail) parts.push(L.geoJSON(it.geojson, {style: {color: css("--surface"), weight: st.w - 2, dashArray: "8 8",
                                                           lineCap: "butt"}, interactive: false}));
-    main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty` +
-                   (it.szczegoly ? "<br>" + esc(it.szczegoly) : ""));
+    main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty w linii prostej` +
+                   (it.szczegoly ? "<br>" + esc(it.szczegoly) : "") + (g === "na_co_dzien" ? routeButton() : ""));
     parts.forEach(p => { p._st = p === main ? path : p.options.style; });
     const fg = L.featureGroup(parts);
     (catLayers[kat] = catLayers[kat] || L.featureGroup()).addLayer(fg);
@@ -791,6 +868,7 @@ function searchParams(form) {
 }
 
 function clearSearch() {
+  routeLayer.clearLayers();
   searchLayers.forEach(l => { map.removeLayer(l); control.removeLayer(l); });
   searchLayers = []; searchMarkers = [];
 }
@@ -800,7 +878,7 @@ function offerPopup(o) {
                  MARKET[o.rynek] || ""].filter(Boolean).join(", ");
   return `<b>${esc(o.tytul || "ogłoszenie")}</b><br>${zl(o.cena)} zł, ${m2(o.powierzchnia_m2)} m², ${zl(o.cena_m2)} zł/m²` +
     (extra ? `<br>${esc(extra)}` : "") + `<br>${esc(o.portal)}${o.takze_na.length ? ", także " + esc(o.takze_na.join(", ")) : ""};
-    położenie ${esc(o.polozenie)}; widziana ${esc(o.ostatnio)}<br><a href="${esc(o.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>`;
+    położenie ${esc(o.polozenie)}; widziana ${esc(o.ostatnio)}<br><a href="${esc(o.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>${routeButton()}`;
 }
 
 function drawSearch(d) {
@@ -820,7 +898,7 @@ function drawSearch(d) {
                                   title: g.nazwa || "kilka ofert w jednym miejscu"});
       marker.bindPopup(`<b>${esc(g.inwestycja ? "Inwestycja " + g.inwestycja : "Kilka ofert w jednym miejscu")}</b><br>
         ${g.liczba} ofert, ${m2(g.metraz_od)}–${m2(g.metraz_do)} m², ${zl(g.cena_m2_od)}–${zl(g.cena_m2_do)} zł/m²<br>
-        ${esc(g.portale.join(", "))}; położenie ${esc(g.polozenie)}`);
+        ${esc(g.portale.join(", "))}; położenie ${esc(g.polozenie)}${routeButton()}`);
     } else {
       const o = g.oferty[0];
       marker = L.circleMarker(g.punkt, {radius: 8, weight: 2, color: css("--surface"),

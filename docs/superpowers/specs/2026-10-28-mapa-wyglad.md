@@ -40,3 +40,10 @@ Zgłoszenie: mapa nie mieści się na stronie i jest poziomym paskiem zamiast pr
 - Telefon w poziomie: jedna linia nagłówka (zakładki i pole wyszukiwania obok siebie), bez nazwy i bez opcji karty (promień, okres, wpis ręczny są w widoku pionowym).
 - Telefon i tablet w pionie: mapa kwadratowa o boku równym szerokości ekranu, najwyżej 70% jego wysokości.
 - Zmierzone w przeglądarce: 1920×1080, 1280×720, 820×1180, 390×844 i 844×390; mapa w całości w oknie (poza widokiem pionowym telefonu z otwartym wpisem ręcznym), bez przewijania w bok.
+
+## Mapbox: stonowany podkład i trasy (2026-10-29)
+
+- Token: na Raspberry Pi w zmiennej `MAPBOX_ACCESS_TOKEN` (plik `~/.mieszkanie100.env`, prawa 600, wczytywany z `~/.bashrc`), nigdy w repozytorium ani w czacie. Serwer wstawia do strony tylko token publiczny (`pk.`, sprawdzany wyrażeniem regularnym); tajny (`sk.`) albo niepoprawny nie trafia do przeglądarki, a serwer wypisuje ostrzeżenie (zasady ze skilla mapbox-token-security). Bez tokenu mapa wraca do kafelków OpenStreetMap, a trasy są wyłączone.
+- Podkład: Mapbox `light-v11` (w ciemnym motywie `dark-v11`) jako kafelki rastrowe przez Leaflet, z wymaganym podpisem Mapbox i OpenStreetMap oraz linkiem „Popraw tę mapę”. Odpowiada na zgłoszenie, że mapa jest nieczytelna: na stonowanym podkładzie dane się wyróżniają. OpenStreetMap jest do wyboru w menu warstw.
+- Trasy (prośba użytkownika): w dymku szkoły, przedszkola, przystanku, podobnej oferty, oferty i inwestycji z wyszukiwania jest przycisk „Trasa stąd”. Początek: punkt oferty z karty albo pinezka w wyszukiwaniu. Najpierw trasa piesza z Mapbox Directions; gdy jest dłuższa niż 3 km, druga trasa samochodem, a podpis podaje oba czasy. Trasa piesza jest kropkowana, samochodowa ciągła, z podpisem na mapie i w linii stanu. Przy przybliżonym położeniu oferty trasa zaczyna się w przybliżonym punkcie.
+- Sprawdzone w przeglądarce w chmurze z podstawionymi odpowiedziami Mapbox (serwery Mapbox są z chmury zablokowane): 950 m daje „pieszo 12 min”, 4,2 km daje drugie zapytanie i „samochodem … pieszo byłoby …”.

@@ -9,6 +9,7 @@ Leaflet is loaded from unpkg with a pinned version and an integrity hash. Standa
 import argparse
 import json
 import os
+import re
 import socket
 import sqlite3
 import sys
@@ -46,11 +47,28 @@ GROUPS = {"linia_wn": "uciazliwosci", "linia_inna": "uciazliwosci", "stacja_ener
           "przedszkole": "na_co_dzien", "szkola": "na_co_dzien", "przystanek": "na_co_dzien"}
 
 
+_PUBLIC_TOKEN = re.compile(r"^pk\.[A-Za-z0-9._-]+$")
+
+
+def public_token(token: Optional[str]) -> Optional[str]:
+    """A Mapbox token that may go to the browser: public (pk.) only. Secret tokens (sk.) never leave the server."""
+    token = (token or "").strip()
+    return token if _PUBLIC_TOKEN.match(token) else None
+
+
+def render_page(token: Optional[str]) -> str:
+    """The page with the Mapbox public token (or null: OpenStreetMap tiles, no routes)."""
+    value = json.dumps(token) if token and _PUBLIC_TOKEN.match(token) else "null"
+    return PAGE.replace("window.MAPBOX_TOKEN = null;", "window.MAPBOX_TOKEN = %s;" % value, 1)
+
+
 class Context:
     """Paths and the building-age index, built once at start (the RCN base changes only on import)."""
 
-    def __init__(self, rcn_db: str, osm_db: str, oferty_db: str, today: Optional[date] = None):
+    def __init__(self, rcn_db: str, osm_db: str, oferty_db: str, today: Optional[date] = None,
+                 mapbox_token: Optional[str] = None):
         self.rcn_db, self.osm_db, self.oferty_db = rcn_db, osm_db, oferty_db
+        self.page = render_page(public_token(mapbox_token))
         self.today = today
         con = sqlite3.connect(rcn_db)
         try:
@@ -331,7 +349,7 @@ def make_handler(ctx: Context):
         def do_GET(self):  # noqa: N802 (http.server naming)
             parts = urllib.parse.urlsplit(self.path)
             if parts.path == "/":
-                self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+                self._send(200, ctx.page.encode("utf-8"), "text/html; charset=utf-8")
             elif parts.path in ("/api/karta", "/api/szukaj"):
                 params = {k: v[-1] for k, v in urllib.parse.parse_qs(parts.query).items()}
                 try:
@@ -368,7 +386,16 @@ def main(argv=None) -> int:
         print("BŁĄD: nie ma bazy RCN %s" % args.rcn_db, file=sys.stderr)
         return 2
     print("Wczytuję wiek budynków z RCN...", flush=True)
-    ctx = Context(args.rcn_db, args.osm_db, args.oferty_db)
+    raw_token = os.environ.get("MAPBOX_ACCESS_TOKEN")
+    token = public_token(raw_token)
+    if raw_token and token is None:
+        print("UWAGA: MAPBOX_ACCESS_TOKEN nie jest tokenem publicznym (pk.); nie trafi do przeglądarki."
+              " Mapa użyje kafelków OpenStreetMap, trasy wyłączone.", flush=True)
+    elif token is None:
+        print("Bez tokenu Mapbox: kafelki OpenStreetMap, trasy wyłączone (MAPBOX_ACCESS_TOKEN).", flush=True)
+    else:
+        print("Mapbox: jasny podkład i trasy włączone.", flush=True)
+    ctx = Context(args.rcn_db, args.osm_db, args.oferty_db, mapbox_token=token)
     if not os.path.exists(args.osm_db):
         print("UWAGA: nie ma bazy OSM %s, mapa bez otoczenia." % args.osm_db)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(ctx))
