@@ -171,6 +171,14 @@ class AreaSearchJsonTests(unittest.TestCase):
         self.assertEqual(kept, ["1", "2", "3"])
         self.assertEqual(mapa.search_json(self.ctx, dict(base, rynek="inny"))[0], 400)
 
+    def test_search_draws_surroundings_too(self):
+        status, body = mapa.search_json(self.ctx, {"lat": str(tk.LAT), "lon": str(tk.LON), "promien": "1000"})
+        kinds = {o["kategoria"] for o in body["otoczenie"]}
+        self.assertIn("przedszkole", kinds)
+        self.assertIn("linia_wn", kinds)
+        near = {c["kategoria"]: c for c in body["otoczenie_lista"]}
+        self.assertAlmostEqual(near["przedszkole"]["odleglosc_m"], 300, delta=3)
+
     def test_position_from_street_and_errors(self):
         status, body = mapa.search_json(self.ctx, {"ulica": "Szurmana", "metraz_od": "60"})
         self.assertEqual(status, 200, body)

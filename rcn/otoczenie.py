@@ -238,8 +238,15 @@ def connect(path: str) -> sqlite3.Connection:
     return con
 
 
-def import_geojsonseq(path: str, db_path: str) -> Dict[str, int]:
-    """Load an osmium GeoJSON sequence; re-import replaces objects by id."""
+class ImportGuardError(Exception):
+    """The new extract is much smaller than the base; refusing to replace it (an empty or failed osmium run)."""
+
+
+GUARD_SHARE = 0.5     # a refresh must keep at least half the objects, unless forced
+
+
+def import_geojsonseq(path: str, db_path: str, force: bool = False) -> Dict[str, int]:
+    """Load an osmium GeoJSON sequence; a re-import replaces the base, but never with a much smaller extract."""
     stats = {"zapisane": 0, "pominiete": 0, "bledne": 0}
     con = connect(db_path)
     rows = []
@@ -266,6 +273,11 @@ def import_geojsonseq(path: str, db_path: str) -> Dict[str, int]:
                          json.dumps(tags, ensure_ascii=False), gtype, json.dumps(coords),
                          min(ys), max(ys), min(xs), max(xs)))
             stats["zapisane"] += 1
+    existing = con.execute("SELECT COUNT(*) FROM osm_obiekty").fetchone()[0]
+    if existing and not force and len(rows) < GUARD_SHARE * existing:
+        con.close()
+        raise ImportGuardError("nowy plik ma %d obiektów, a baza %d; to wygląda na nieudany lub pusty wynik osmium."
+                               " Baza zostaje bez zmian. Jeśli to zamierzone, dodaj --force." % (len(rows), existing))
     with con:  # full refresh: objects missing from the new extract must disappear
         con.execute("DELETE FROM osm_obiekty")
         con.executemany("INSERT OR REPLACE INTO osm_obiekty VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
@@ -332,6 +344,7 @@ def main(argv=None) -> int:
     imp = sub.add_parser("import", help="wczytaj plik GeoJSON z osmium do bazy")
     imp.add_argument("--geojsonseq", required=True)
     imp.add_argument("--osm-db", default="osm_slask.sqlite")
+    imp.add_argument("--force", action="store_true", help="zastąp bazę nawet dużo mniejszym plikiem")
     near = sub.add_parser("near", help="obiekty w promieniu od ulicy z bazy RCN")
     near.add_argument("--osm-db", default="osm_slask.sqlite")
     near.add_argument("--rcn-db", default="rcn_test.sqlite")
@@ -341,7 +354,11 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     if args.command == "import":
-        stats = import_geojsonseq(args.geojsonseq, args.osm_db)
+        try:
+            stats = import_geojsonseq(args.geojsonseq, args.osm_db, args.force)
+        except ImportGuardError as exc:
+            print("BŁĄD: %s" % exc, file=sys.stderr)
+            return 2
         print("Zapisane: %(zapisane)d, pominięte (inne obiekty): %(pominiete)d, błędne: %(bledne)d" % stats)
         return 0
     from rcn.okolica import find_center

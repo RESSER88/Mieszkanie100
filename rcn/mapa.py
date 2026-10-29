@@ -35,6 +35,7 @@ FULL_RADIUS_CAP = 600          # ways per category, a guard for dense road netwo
 # Power lines are sparse and matter from afar, so they are looked up further than the rest.
 GRID = ("linia_najwyzsza", "linia_wn")
 GRID_RADIUS_M = 10000.0
+OSM_RADIUS_M = 3000.0          # surroundings around a search pin (the card uses its own, also 3 km)
 SIMPLIFY_M = 3.0               # shapes are simplified to this tolerance before sending to the phone
 MARKET_TEXT = {"rynekWtorny": "wtórny", "rynekPierwotny": "pierwotny"}
 # Groups for the page and the map legend: what to avoid, roads that will change, what a family uses daily.
@@ -175,6 +176,17 @@ def _nearest_by_category(items: List[dict]) -> List[dict]:
     return out
 
 
+def _surroundings(osm: Optional[sqlite3.Connection], center, radius_m: float) -> List[dict]:
+    """OSM objects for a point, nearest first: everything to radius_m plus power lines to GRID_RADIUS_M."""
+    if osm is None:
+        return []
+    items = otoczenie.nearby(osm, center, radius_m, geometry=True)
+    seen = {i["id"] for i in items}
+    items += [i for i in otoczenie.nearby(osm, center, GRID_RADIUS_M, GRID, geometry=True) if i["id"] not in seen]
+    items.sort(key=lambda i: i["odleglosc_m"])
+    return items
+
+
 def _summary(s: okolica.Summary) -> Dict[str, Any]:
     return {"proba": s.n, "od": s.period_from, "do": s.period_to, "mediana": s.median_m2, "p25": s.p25_m2,
             "p75": s.p75_m2, "status": s.status}
@@ -208,12 +220,7 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
         osm = otoczenie.connect(ctx.osm_db) if os.path.exists(ctx.osm_db) else None
         try:
             card = karta.build_card(offer, rcn, osm, radius, months, today=ctx.today, ages=ctx.ages)
-            items = otoczenie.nearby(osm, card["srodek"], card["promien_otoczenia_m"], geometry=True) if osm else []
-            if osm is not None:
-                seen = {i["id"] for i in items}
-                items += [i for i in otoczenie.nearby(osm, card["srodek"], GRID_RADIUS_M, GRID, geometry=True)
-                          if i["id"] not in seen]
-                items.sort(key=lambda i: i["odleglosc_m"])
+            items = _surroundings(osm, card["srodek"], card["promien_otoczenia_m"])
         finally:
             rcn.close()
             if osm is not None:
@@ -313,6 +320,12 @@ def search_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, An
     offers = filtry.sort(offers, f.sortuj)
     groups = podobne.group_offers(offers)
     date_from = okolica.months_ago(today, 24).isoformat()
+    osm = otoczenie.connect(ctx.osm_db) if os.path.exists(ctx.osm_db) else None
+    try:
+        items = _surroundings(osm, center, OSM_RADIUS_M)
+    finally:
+        if osm is not None:
+            osm.close()
     rcn = sqlite3.connect(ctx.rcn_db)
     try:
         rows, _ = okolica.transactions_in_radius(rcn, center, radius, date_from, today.isoformat(), area_min, area_max)
@@ -326,6 +339,8 @@ def search_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, An
         "rcn": [{"etykieta": label, **_summary(okolica.summarize([r for r in rows if r["rodzaj_rynku"] == key]))}
                 for key, label in okolica.MARKETS],
         "zrodla": freshness,
+        "otoczenie": _osm_for_map(items), "otoczenie_lista": _nearest_by_category(items),
+        "promien_otoczenia_m": OSM_RADIUS_M, "promien_sieci_m": GRID_RADIUS_M,
     }
 
 

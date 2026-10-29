@@ -164,7 +164,7 @@ class StoreAndQueryTests(unittest.TestCase):
     def test_reimport_drops_objects_missing_from_new_file(self):
         path = os.path.join(self.tmp.name, "small.geojsonseq")
         seq_file([feature("n1", point(LON, LAT), amenity="school")], path)
-        oz.import_geojsonseq(path, self.db)
+        oz.import_geojsonseq(path, self.db, force=True)         # a smaller extract, on purpose
         con = oz.connect(self.db)
         self.assertEqual(con.execute("SELECT COUNT(*) FROM osm_obiekty").fetchone()[0], 1)
 
@@ -240,6 +240,39 @@ class InverseProjectionTests(unittest.TestCase):
             back = oz.pl1992_to_wgs84(y, x)
             self.assertLess(abs(back[0] - lat) * 111000, 0.01)
             self.assertLess(abs(back[1] - lon) * 71000, 0.01)
+
+
+class ImportGuardTests(unittest.TestCase):
+    def write(self, path, n):
+        with open(path, "w", encoding="utf-8") as f:
+            for i in range(n):
+                f.write("\x1e" + json.dumps({"type": "Feature", "id": "n%d" % i, "properties": {"amenity": "school"},
+                        "geometry": {"type": "Point", "coordinates": [18.97, 50.23 + i * 1e-4]}}) + "\n")
+
+    def test_much_smaller_extract_does_not_wipe_the_base(self):
+        with tempfile.TemporaryDirectory() as d:
+            seq, db = os.path.join(d, "o.geojsonseq"), os.path.join(d, "osm.sqlite")
+            self.write(seq, 100)
+            oz.import_geojsonseq(seq, db)
+            self.write(seq, 0)
+            with self.assertRaises(oz.ImportGuardError):
+                oz.import_geojsonseq(seq, db)
+            con = oz.connect(db)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM osm_obiekty").fetchone()[0], 100)
+            con.close()
+            self.write(seq, 40)
+            oz.import_geojsonseq(seq, db, force=True)                 # on purpose
+            con = oz.connect(db)
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM osm_obiekty").fetchone()[0], 40)
+            con.close()
+
+    def test_similar_size_refresh_goes_through(self):
+        with tempfile.TemporaryDirectory() as d:
+            seq, db = os.path.join(d, "o.geojsonseq"), os.path.join(d, "osm.sqlite")
+            self.write(seq, 100)
+            oz.import_geojsonseq(seq, db)
+            self.write(seq, 90)
+            self.assertEqual(oz.import_geojsonseq(seq, db)["zapisane"], 90)
 
 
 if __name__ == "__main__":

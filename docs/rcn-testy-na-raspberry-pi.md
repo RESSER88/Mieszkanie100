@@ -340,3 +340,8 @@ cd /mnt/nas/projects/mieszkanie100 && git pull && cd ref/osm && osmium tags-filt
 - Karta z linku Nieruchomosci-online działa (ul. Szurmana, 839 000 zł, 65,08 m²).
 - Morizon: lista działa (35 kart na stronę). Strona ogłoszenia ma dane w `__NUXT_DATA__` jak Gratka (wspólna platforma); położenie to środek mapy (`center`), nie jej ramki. Przed kodem `63e4222` karta Morizon kończyła się błędem „brak współrzędnych”.
 - mScanner: API pod `https://api.mscanner.pl/api`; strona opisuje oferty deweloperów na mapie i decyzje o pozwoleniu na budowę, ale adresów tych zapytań nie ma w pobranych plikach. Do rozpoznania przez podgląd ruchu sieciowego strony mScanner (F12).
+
+## Zniknęły linie, szkoły i przystanki (2026-10-29)
+
+- Zgłoszenie: na mapie nie ma linii, szkół ani przystanków. Dwie przyczyny w kodzie: (1) tryb „Szukaj w okolicy” w ogóle nie rysował otoczenia z OSM, tylko oferty (pominięte przy dodawaniu wyszukiwania); (2) ponowne wczytanie bazy OSM kasowało całą bazę przed wpisaniem nowej, więc pusty lub nieudany wynik `osmium` zostawiał pustą bazę.
+- Poprawki: wyszukiwanie rysuje otoczenie wokół pinezki tak jak karta (wspólna funkcja `_surroundings` w `rcn/mapa.py` i `drawSurroundings` na stronie, legenda z oznaczeniami); `rcn/otoczenie.py import` odmawia zastąpienia bazy plikiem mającym mniej niż połowę obiektów bazy (komunikat „Baza zostaje bez zmian”), chyba że użytkownik doda `--force`.

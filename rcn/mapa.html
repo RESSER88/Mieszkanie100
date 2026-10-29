@@ -582,10 +582,14 @@ function legendHtml(m) {
   const price = `<span class="key" style="background:${css("--cheap")}"></span>cena poniżej typowej (RCN)<br>
     <span class="key" style="background:${css("--typical")}"></span>w typowym zakresie<br>
     <span class="key" style="background:${css("--dear")}"></span>powyżej typowej<br>`;
+  const places = `${swatch("linia_najwyzsza")}linia 220–400 kV<br>${swatch("linia_wn")}linia 110 kV<br>
+    ${swatch("kolej")}kolej<br>${swatch("tramwaj")}tramwaj<br>${swatch("droga_glowna")}droga główna<br>
+    ${swatch("przemysl")}przemysł, składowisko, lotnisko<br>${swatch("droga_w_budowie")}droga w budowie<br>
+    ${swatch("droga_planowana")}droga planowana<br>${swatch("szkola")}szkoła, przedszkole, przystanek`;
   if (m === "szukaj") return `<summary>Legenda</summary>${price}
     <span class="key" style="border:2px solid ${css("--ink")}"></span>kilka ofert blisko siebie (przybliż)<br>
     <span class="key" style="border-radius:3px;border:2px solid ${css("--ink")}"></span>inwestycja lub budynek: liczba ofert<br>
-    <span class="key" style="background:#2a81cb;border-radius:50% 50% 50% 0"></span>pinezka: środek wyszukiwania`;
+    <span class="key" style="background:#2a81cb;border-radius:50% 50% 50% 0"></span>pinezka: środek wyszukiwania<br>${places}`;
   return `<summary>Legenda</summary>${price}
     <span class="key" style="border:3px solid ${css("--ink")}"></span>obwódka: budynek do 10 lat<br>
     <span class="key" style="border:4px solid ${css("--ink")};width:16px;height:16px;vertical-align:-4px"></span>oferta<br>
@@ -638,9 +642,16 @@ function drawMap(d) {
     .bindPopup(`<b>${i + 1}. ${esc(p.tytul || p.portal)}</b><br>${zl(p.cena)} zł, ${m2(p.powierzchnia_m2)} m², ${zl(p.cena_m2)} zł/m²<br>
                 ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>${routeButton()}`));
   if (similarMarkers.length) overlay(L.layerGroup(similarMarkers), "Podobne oferty");
-  const groups = {};
-  catLayers = {}; nearestLayer = {};
-  d.otoczenie.forEach(it => {
+  drawSurroundings(d.otoczenie, "od oferty").forEach(([layer, name]) => overlay(layer, name));
+  lastCenter = d.srodek; lit = null;
+  map.fitBounds(circle.getBounds(), {padding: [24, 24]});
+}
+
+// OSM surroundings (nuisances, roads that will change, everyday places), the same in the card and the search.
+function drawSurroundings(list, fromWhat) {
+  const groups = {}, track = fromWhat === "od oferty";    // the card's table highlights these layers
+  if (track) { catLayers = {}; nearestLayer = {}; }
+  list.forEach(it => {
     const g = it.grupa, kat = it.kategoria, st = STYLE[kat] || STYLE.przemysl, color = css(st.ink);
     const parts = [];
     const path = {color, weight: st.w, opacity: st.op || 1, dashArray: st.rail ? null : st.dash || null,
@@ -653,17 +664,17 @@ function drawMap(d) {
     parts.push(main);
     if (st.rail) parts.push(L.geoJSON(it.geojson, {style: {color: css("--surface"), weight: st.w - 2, dashArray: "8 8",
                                                           lineCap: "butt"}, interactive: false}));
-    main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m od oferty w linii prostej` +
+    main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m ${fromWhat} w linii prostej` +
                    (it.szczegoly ? "<br>" + esc(it.szczegoly) : "") + (g === "na_co_dzien" ? routeButton() : ""));
     parts.forEach(p => { p._st = p === main ? path : p.options.style; });
     const fg = L.featureGroup(parts);
-    (catLayers[kat] = catLayers[kat] || L.featureGroup()).addLayer(fg);
-    if (!nearestLayer[kat]) nearestLayer[kat] = main;
+    if (track) {
+      (catLayers[kat] = catLayers[kat] || L.featureGroup()).addLayer(fg);
+      if (!nearestLayer[kat]) nearestLayer[kat] = main;
+    }
     (groups[g] = groups[g] || L.layerGroup()).addLayer(fg);
   });
-  ["uciazliwosci", "drogi", "na_co_dzien"].forEach(g => groups[g] && overlay(groups[g], GROUP_NAMES[g]));
-  lastCenter = d.srodek; lit = null;
-  map.fitBounds(circle.getBounds(), {padding: [24, 24]});
+  return ["uciazliwosci", "drogi", "na_co_dzien"].filter(g => groups[g]).map(g => [groups[g], GROUP_NAMES[g]]);
 }
 
 function ruler(c, price, lo, hi) {
@@ -937,6 +948,9 @@ function drawSearch(d) {
     marker._gi = gi;
     searchMarkers.push(marker);
     cluster.addLayer(marker);
+  });
+  drawSurroundings(d.otoczenie || [], "od pinezki").forEach(([layer, name]) => {
+    layer.addTo(map); searchLayers.push(layer); control.addOverlay(layer, name);
   });
   [circle, cluster].forEach(l => { l.addTo(map); searchLayers.push(l); });
   control.addOverlay(cluster, "Oferty w okolicy");
