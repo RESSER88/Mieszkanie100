@@ -177,7 +177,17 @@
     :root:not([data-theme="light"]) .osm-muted { filter: grayscale(.9) brightness(.62) contrast(1.05); }
   }
   :root[data-theme="dark"] .osm-muted { filter: grayscale(.9) brightness(.62) contrast(1.05); }
-  .route-btn { margin-top: 8px; min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .map-label { font: 600 11.5px/1.2 system-ui, sans-serif; color: var(--ink); background: var(--surface); padding: 2px 6px;
+               border: 1px solid var(--line-2); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.2); white-space: nowrap; }
+  .map-label::before { display: none; }
+  .pop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .route-btn, .units-btn, .pop-btn { min-height: 36px; padding: 0 12px; font: 600 13px/36px system-ui, sans-serif;
+                                     border-radius: 6px; cursor: pointer; }
+  .pop-btn { display: inline-block; background: var(--ink); color: var(--ground) !important; text-decoration: none; }
+  .route-btn, .units-btn { background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); }
+  .pop-units { margin: 8px 0 0; padding: 0; list-style: none; max-height: 150px; overflow-y: auto; }
+  .pop-units li { padding: 3px 0; border-top: 1px solid var(--line); }
+  .pop-units span { color: var(--muted); font-size: 12px; }
   .route-label { font: 600 12.5px/1.3 system-ui, sans-serif; color: var(--ink); background: var(--surface);
                  border: 1px solid var(--line-2); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 
@@ -444,7 +454,7 @@ const STYLE = {
   stacja_energetyczna: {ink: "--nuisance", w: 2.5, fill: .35},
   maszt: {ink: "--nuisance", w: 2, fill: .5},
   kolej: {ink: "--nuisance", w: 5, rail: true},
-  tramwaj: {ink: "--nuisance", w: 2, dash: "4 3", op: .8},
+  tramwaj: {ink: "--nuisance", w: 2.5, dash: "4 3", casing: true},
   lotnisko: {ink: "--nuisance", w: 2, dash: "6 3", fill: .1},
   droga_glowna: {ink: "--nuisance", w: 7, op: .4},
   droga_drugorzedna: {ink: "--nuisance", w: 4, op: .28},
@@ -452,8 +462,8 @@ const STYLE = {
   skladowisko: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
   oczyszczalnia: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
   kamieniolom: {ink: "--nuisance", w: 1.5, dash: "4 3", fill: .18},
-  droga_w_budowie: {ink: "--road", w: 4, dash: "8 5"},
-  droga_planowana: {ink: "--road", w: 3, dash: "2 6"},
+  droga_w_budowie: {ink: "--road", w: 4, dash: "8 5", casing: true},
+  droga_planowana: {ink: "--road", w: 3.5, dash: "2 6", casing: true},
   przedszkole: {ink: "--daily", w: 2, fill: .15, diamond: true},
   szkola: {ink: "--daily", w: 2, fill: .15, diamond: true},
   przystanek: {ink: "--daily", w: 2, fill: .15, diamond: true},
@@ -522,7 +532,13 @@ const control = L.control.layers(bases, null, {collapsed: true}).addTo(map);
 // ---- Routes: from the offer (card) or the pin (search) to a clicked place; on foot up to 3 km, else by car ----
 const WALK_LIMIT_M = 3000;
 let routeLayer = L.layerGroup().addTo(map), popupAt = null;
-function routeButton() { return TOKEN ? `<br><button type="button" class="route-btn">Trasa stąd</button>` : ""; }
+function routeButton() { return TOKEN ? `<div class="pop-actions"><button type="button" class="route-btn">Trasa stąd</button></div>` : ""; }
+// Every popup of an offer ends with the same two actions: open the listing, route there.
+function offerActions(url, withRoute = true) {
+  const open = url ? `<a class="pop-btn" href="${esc(url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>` : "";
+  const route = TOKEN && withRoute ? `<button type="button" class="route-btn">Trasa stąd</button>` : "";
+  return open || route ? `<div class="pop-actions">${open}${route}</div>` : "";
+}
 function duration(sec) {
   const min = Math.max(1, Math.round(sec / 60));
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
@@ -569,6 +585,14 @@ async function showRoute(to, name) {
 }
 map.on("popupopen", ev => {
   popupAt = ev.popup.getLatLng();
+  const units = ev.popup.getElement().querySelector(".units-btn");
+  if (units) units.onclick = () => {
+    const head = document.querySelector(`#s-list tr.grp-head[data-g="${units.dataset.g}"]`);
+    if (!head) return;
+    head.setAttribute("aria-expanded", "true");
+    document.querySelectorAll(`#s-list tr[data-parent="${units.dataset.g}"]`).forEach(r => { r.hidden = false; });
+    head.scrollIntoView({block: "start", behavior: "smooth"});
+  };
   const btn = ev.popup.getElement().querySelector(".route-btn");
   if (btn) btn.onclick = () => {
     const title = ev.popup.getElement().querySelector(".leaflet-popup-content b");
@@ -602,7 +626,7 @@ function legendHtml(m) {
 let legendBox = null;
 legend.onAdd = () => {
   legendBox = L.DomUtil.create("details", "legend");
-  legendBox.open = window.innerWidth >= 1024;   // the legend covers too much of a sideways phone
+  legendBox.open = false;        // folded: open on demand, the map labels carry the meaning
   legendBox.innerHTML = legendHtml("karta");
   L.DomEvent.disableClickPropagation(legendBox);
   return legendBox;
@@ -629,7 +653,7 @@ function drawMap(d) {
   const o = d.oferta;
   const offer = L.circleMarker(d.srodek, {radius: 16, color: css("--ink"), weight: 4, fill: false})
     .bindPopup(`<b>${esc(o.tytul || "Oferta")}</b><br>${zl(o.cena)} zł, ${m2(o.powierzchnia_m2)} m², ${zl(o.cena_m2)} zł/m²` +
-               (d.przyblizone ? "<br>położenie przybliżone" : ""));
+               (d.przyblizone ? "<br>położenie przybliżone" : "") + offerActions(o.url, false));
   saleMarkers = d.transakcje.map(t => L.circleMarker(t.punkt, {
       radius: 7, weight: t.nowy ? 3 : 1.5, color: t.nowy ? css("--ink") : css("--surface"),
       fillColor: priceColor(t.cena_m2, ref), fillOpacity: .9})
@@ -640,15 +664,35 @@ function drawMap(d) {
   similarMarkers = d.podobne.map((p, i) => L.marker(p.punkt, {
       icon: L.divIcon({className: "sq", html: String(i + 1), iconSize: null})})
     .bindPopup(`<b>${i + 1}. ${esc(p.tytul || p.portal)}</b><br>${zl(p.cena)} zł, ${m2(p.powierzchnia_m2)} m², ${zl(p.cena_m2)} zł/m²<br>
-                ${esc(p.portal)}, położenie ${esc(p.polozenie)}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>${routeButton()}`));
+                ${esc(p.portal)}, położenie ${esc(p.polozenie)}${offerActions(p.url)}`));
   if (similarMarkers.length) overlay(L.layerGroup(similarMarkers), "Podobne oferty");
-  drawSurroundings(d.otoczenie, "od oferty").forEach(([layer, name]) => overlay(layer, name));
+  drawSurroundings(d.otoczenie, "od oferty", d.srodek).forEach(([layer, name]) => overlay(layer, name));
   lastCenter = d.srodek; lit = null;
   map.fitBounds(circle.getBounds(), {padding: [24, 24]});
 }
 
 // OSM surroundings (nuisances, roads that will change, everyday places), the same in the card and the search.
-function drawSurroundings(list, fromWhat) {
+// Direct labels: the nearest object of each kind that matters says what it is and how far, on the map itself.
+const LABELED = {linia_najwyzsza: "220–400 kV", linia_wn: "110 kV", kolej: "kolej", droga_glowna: "droga główna",
+                 przemysl: "przemysł", droga_w_budowie: "droga w budowie", szkola: "szkoła", przedszkole: "przedszkole",
+                 przystanek: "przystanek"};
+function labelText(kat, it) {
+  const kind = LABELED[kat], name = (it.nazwa || "").trim();
+  if (!name || STYLE[kat] && !STYLE[kat].diamond) return kind;
+  return name.toLowerCase().includes(kind) ? name : `${kind} ${name}`;    // "Przedszkole nr 1", not "przedszkole Przedszkole nr 1"
+}
+function nearestVertex(geojson, origin) {
+  const o = L.latLng(origin);
+  let best = null, bestD = Infinity;
+  const walk = c => {
+    if (typeof c[0] === "number") { const ll = L.latLng(c[1], c[0]); const dd = o.distanceTo(ll); if (dd < bestD) { bestD = dd; best = ll; } }
+    else c.forEach(walk);
+  };
+  walk(geojson.coordinates);
+  return best;
+}
+function drawSurroundings(list, fromWhat, origin) {
+  const labeled = new Set();
   const groups = {}, track = fromWhat === "od oferty";    // the card's table highlights these layers
   if (track) { catLayers = {}; nearestLayer = {}; }
   list.forEach(it => {
@@ -667,6 +711,12 @@ function drawSurroundings(list, fromWhat) {
     main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m ${fromWhat} w linii prostej` +
                    (it.szczegoly ? "<br>" + esc(it.szczegoly) : "") + (g === "na_co_dzien" ? routeButton() : ""));
     parts.forEach(p => { p._st = p === main ? path : p.options.style; });
+    if (origin && LABELED[kat] && !labeled.has(kat)) {
+      labeled.add(kat);
+      const at = nearestVertex(it.geojson, origin);
+      if (at) parts.push(L.tooltip({permanent: true, direction: "right", offset: [8, 0], className: "map-label", interactive: false})
+        .setLatLng(at).setContent(`${esc(labelText(kat, it))}, ${length(it.odleglosc_m)}`));
+    }
     const fg = L.featureGroup(parts);
     if (track) {
       (catLayers[kat] = catLayers[kat] || L.featureGroup()).addLayer(fg);
@@ -788,6 +838,7 @@ function highlight(kat) {
   Object.entries(catLayers).forEach(([k, group]) => {
     const dim = kat && k !== kat;
     group.eachLayer(fg => fg.eachLayer(part => {
+      if (!part.setStyle) { const el = part.getElement && part.getElement(); if (el) el.style.opacity = dim ? .2 : 1; return; }
       part.setStyle(dim ? {opacity: .1, fillOpacity: .02} : part._st);
       part.eachLayer(l => { if (l.setOpacity) l.setOpacity(dim ? .15 : 1); });
     }));
@@ -919,7 +970,7 @@ function offerPopup(o) {
                  MARKET[o.rynek] || ""].filter(Boolean).join(", ");
   return `<b>${esc(o.tytul || "ogłoszenie")}</b><br>${zl(o.cena)} zł, ${m2(o.powierzchnia_m2)} m², ${zl(o.cena_m2)} zł/m²` +
     (extra ? `<br>${esc(extra)}` : "") + `<br>${esc(o.portal)}${o.takze_na.length ? ", także " + esc(o.takze_na.join(", ")) : ""};
-    położenie ${esc(o.polozenie)}; widziana ${esc(o.ostatnio)}<br><a href="${esc(o.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>${routeButton()}`;
+    położenie ${esc(o.polozenie)}; widziana ${esc(o.ostatnio)}${offerActions(o.url)}`;
 }
 
 function drawSearch(d) {
@@ -939,7 +990,11 @@ function drawSearch(d) {
                                   title: g.nazwa || "kilka ofert w jednym miejscu"});
       marker.bindPopup(`<b>${esc(g.inwestycja ? "Inwestycja " + g.inwestycja : "Kilka ofert w jednym miejscu")}</b><br>
         ${g.liczba} ofert, ${m2(g.metraz_od)}–${m2(g.metraz_do)} m², ${zl(g.cena_m2_od)}–${zl(g.cena_m2_do)} zł/m²<br>
-        ${esc(g.portale.join(", "))}; położenie ${esc(g.polozenie)}${routeButton()}`);
+        ${esc(g.portale.join(", "))}; położenie ${esc(g.polozenie)}
+        <ul class="pop-units">${g.oferty.slice(0, 6).map(o => `<li><a href="${esc(o.url)}" target="_blank" rel="noopener">${m2(o.powierzchnia_m2)} m²,
+          ${zl(o.cena)} zł</a> <span>${zl(o.cena_m2)} zł/m², ${esc(o.portal)}</span></li>`).join("")}</ul>
+        <div class="pop-actions"><button type="button" class="units-btn" data-g="${gi}">Wszystkie lokale w liście (${g.liczba})</button>
+        ${TOKEN ? '<button type="button" class="route-btn">Trasa stąd</button>' : ""}</div>`);
     } else {
       const o = g.oferty[0];
       marker = L.circleMarker(g.punkt, {radius: 8, weight: 2, color: css("--surface"),
@@ -949,7 +1004,7 @@ function drawSearch(d) {
     searchMarkers.push(marker);
     cluster.addLayer(marker);
   });
-  drawSurroundings(d.otoczenie || [], "od pinezki").forEach(([layer, name]) => {
+  drawSurroundings(d.otoczenie || [], "od pinezki", d.srodek).forEach(([layer, name]) => {
     layer.addTo(map); searchLayers.push(layer); control.addOverlay(layer, name);
   });
   [circle, cluster].forEach(l => { l.addTo(map); searchLayers.push(l); });
