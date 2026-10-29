@@ -67,7 +67,7 @@
   button[disabled] { opacity: .55; cursor: progress; }
   .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--ink-2); font-size: 14px; }
   .opts label { display: inline-flex; align-items: center; gap: 6px; }
-  .opts select { min-height: 36px; padding: 4px 8px; }
+  .opts select { min-height: 40px; padding: 4px 8px; }
   button.linkish { background: none; border: 0; color: var(--ink-2); font-weight: 500; font-size: 14px; padding: 0;
                    min-height: 36px; text-decoration: underline; text-underline-offset: 3px;
                    text-decoration-color: var(--line-2); }
@@ -84,23 +84,46 @@
 
   .side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
   .modes { display: flex; gap: 4px; }
-  .modes button { min-height: 36px; padding: 0 12px; background: transparent; color: var(--ink-2); border: 1px solid var(--line-2);
+  .modes button { min-height: 40px; padding: 0 14px; background: transparent; color: var(--ink-2); border: 1px solid var(--line-2);
                   font-weight: 500; }
   .modes button[aria-selected="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); font-weight: 600; }
   #fs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   #fs[hidden], #f[hidden] { display: none; }
-  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 14px; color: var(--ink-2);
-             border: 0; margin: 0; padding: 0; min-width: 0; }
-  .filters label { display: inline-flex; align-items: center; gap: 6px; }
-  .filters input:not([type=checkbox]) { min-height: 36px; padding: 4px 8px; width: auto; }
-  .filters select { min-height: 36px; padding: 4px 8px; }
-  .filters input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ink); min-height: 0; }
-  fieldset.filters { margin-top: 8px; }
-  fieldset.filters legend { font-weight: 600; color: var(--ink); padding: 0; margin-bottom: 4px; font-size: 13px; }
-  .hint { font-size: 12px; color: var(--muted); }
-  details.more > summary { cursor: pointer; color: var(--ink-2); font-size: 14px; min-height: 36px; display: inline-flex;
-                           align-items: center; }
-  details.more[open] { padding-bottom: 6px; }
+  /* Filter panel: right column above the results on wide screens, one tappable line above the map on phones. */
+  .fbox { background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 16px; }
+  .fbox > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 10px; min-height: 48px;
+                    padding: 12px 0; }
+  .fbox > summary::-webkit-details-marker { display: none; }
+  .fbox > summary::after { content: "zmień"; margin-left: auto; font-size: 13px; color: var(--ink-2); text-decoration: underline;
+                           text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+  .fbox[open] > summary::after { content: "zwiń"; }
+  .fbox-title { font-weight: 650; font-size: 16px; }
+  .fbox-sum { font-size: 13px; color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; border: 0; margin: 0 0 12px;
+           padding: 0; min-width: 0; }
+  .f { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+  .f select, .f input { width: 100%; min-height: 44px; padding: 8px 10px; }
+  .f.range { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
+  .f.range > span { grid-column: 1 / -1; }
+  fieldset.fgrid legend, fieldset.chips legend { grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: var(--ink);
+                                                 padding: 0; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; border: 0; margin: 0 0 12px; padding: 0; min-width: 0; }
+  .chips legend { width: 100%; }
+  .chip { position: relative; display: inline-flex; }
+  .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .chip span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-2);
+               border-radius: 20px; font-size: 13.5px; color: var(--ink-2); cursor: pointer; user-select: none;
+               transition: background-color .15s ease-out, color .15s ease-out; }
+  .chip input:checked + span { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+  .chip input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .badge[hidden] { display: none; }
+  .badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px;
+           border-radius: 10px; background: var(--ink); color: var(--ground); font-size: 11.5px; font-weight: 700; }
+  details.more { border-top: 1px solid var(--line); margin: 4px 0 8px; }
+  details.more > summary { cursor: pointer; color: var(--ink); font-size: 14px; font-weight: 600; min-height: 44px;
+                           display: flex; align-items: center; }
+  .factions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 4px 0 16px; }
   #s-list tbody tr { cursor: pointer; }
   #s-list tbody tr:hover td { background: var(--ground); }
   tr.grp-unit td:first-child { padding-left: 28px; }
@@ -118,9 +141,10 @@
   @media (min-width: 1024px) {
     .bar-in { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 24px; }
     .bar-in > .side { grid-column: 2; }
-    .work { grid-template-columns: minmax(0, 1fr) 460px; }
-    #map { position: sticky; top: 0; height: 100vh; }
-    #panel { border-left: 1px solid var(--line); min-height: 100vh; }
+    .work { grid-template-columns: minmax(0, 1fr) 460px; grid-template-rows: auto 1fr; }
+    #map { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: 0; height: 100vh; align-self: start; }
+    #filters { grid-column: 2; grid-row: 1; border-left: 1px solid var(--line); }
+    #panel { grid-column: 2; grid-row: 2; border-left: 1px solid var(--line); min-height: 100vh; }
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .leaflet-tile-pane { filter: brightness(.72) saturate(.75); }
@@ -248,63 +272,83 @@
                placeholder="Kliknij mapę, żeby postawić pinezkę, albo wpisz ulicę lub wklej link">
         <button id="go-s" type="submit">Szukaj ofert</button>
       </div>
-      <div class="filters">
-        <label>Promień <select name="promien"><option>500</option><option selected>1000</option><option>2000</option>
-          <option>3000</option></select> m</label>
-        <label>Metraż od <input name="metraz_od" inputmode="decimal" size="4"></label>
-        <label>do <input name="metraz_do" inputmode="decimal" size="4"> m²</label>
-        <label>Cena do <input name="cena_do" inputmode="numeric" size="8"> zł</label>
-        <label>Rynek <select name="rynek"><option value="">dowolny</option><option value="wtorny">wtórny</option>
-          <option value="pierwotny">pierwotny</option></select></label>
-        <label>Deweloperzy <select name="deweloperzy"><option value="grupuj">grupuj w inwestycje</option>
-          <option value="ukryj">ukryj</option><option value="tylko">tylko oni</option></select></label>
-        <label>Sortuj <select name="sortuj"><option value="odleglosc">odległość</option><option value="cena_m2">zł/m²</option>
-          <option value="cena">cena</option><option value="metraz">metraż, od największych</option>
-          <option value="najnowsze">najnowsze</option></select></label>
-        <button type="button" class="linkish" id="pin-from-card" hidden>Pinezka w miejscu karty</button>
-      </div>
-      <details class="more">
-        <summary>Więcej filtrów</summary>
-        <div class="filters">
-          <label>Cena od <input name="cena_od" inputmode="numeric" size="8"> zł</label>
-          <label>zł/m² od <input name="cena_m2_od" inputmode="numeric" size="6"></label>
-          <label>do <input name="cena_m2_do" inputmode="numeric" size="6"></label>
-          <label>Pokoje od <input name="pokoje_od" inputmode="numeric" size="2"></label>
-          <label>do <input name="pokoje_do" inputmode="numeric" size="2"></label>
-          <label>Piętro od <input name="pietro_od" inputmode="numeric" size="2"></label>
-          <label>do <input name="pietro_do" inputmode="numeric" size="2"></label>
-          <label class="check"><input type="checkbox" name="bez_parteru" value="1"> bez parteru</label>
-        </div>
-        <fieldset class="filters"><legend>Portale</legend>
-          <label class="check"><input type="checkbox" name="portale" value="olx"> OLX</label>
-          <label class="check"><input type="checkbox" name="portale" value="otodom"> Otodom</label>
-          <label class="check"><input type="checkbox" name="portale" value="nieruchomosci-online"> Nieruchomosci-online</label>
-          <label class="check"><input type="checkbox" name="portale" value="morizon"> Morizon</label>
-          <span class="hint">nic nie zaznaczone: wszystkie</span></fieldset>
-        <fieldset class="filters"><legend>Zabudowa (z OLX)</legend>
-          <label class="check"><input type="checkbox" name="zabudowa" value="blok"> blok</label>
-          <label class="check"><input type="checkbox" name="zabudowa" value="kamienica"> kamienica</label>
-          <label class="check"><input type="checkbox" name="zabudowa" value="apartamentowiec"> apartamentowiec</label>
-          <label class="check"><input type="checkbox" name="zabudowa" value="dom wolnostojący"> dom wolnostojący</label>
-          <label class="check"><input type="checkbox" name="zabudowa" value="szeregowiec"> szeregowiec</label>
-          <label class="check"><input type="checkbox" name="zabudowa" value="pozostałe"> pozostałe</label></fieldset>
-        <fieldset class="filters"><legend>Z dala od (OSM, w linii prostej od punktu oferty)</legend>
-          <label>linii 110–400 kV <select name="z_dala_linie"></select></label>
-          <label>kolei <select name="z_dala_kolej"></select></label>
-          <label>drogi głównej <select name="z_dala_droga"></select></label>
-          <label>przemysłu <select name="z_dala_przemysl"></select></label></fieldset>
-        <div class="filters">
-          <label>Nowe z ostatnich <select name="nowe_dni"><option value="">dowolnie</option><option>1</option><option>3</option>
-            <option>7</option><option>14</option><option>30</option></select> dni</label>
-          <label class="check"><input type="checkbox" name="tylko_aktualne" value="1"> tylko widziane w ostatnim wyszukiwaniu</label>
-        </div>
-      </details>
     </form>
     <p id="status" role="status" aria-live="polite"></p>
     </div>
   </div>
 </header>
 <main class="work">
+  <details id="filters" class="fbox" hidden>
+    <summary><span class="fbox-title">Filtry</span><span id="f-sum" class="fbox-sum"></span></summary>
+    <div class="fgrid">
+      <label class="f">Promień
+        <select name="promien" form="fs"><option value="500">500 m</option><option value="1000" selected>1 km</option>
+          <option value="2000">2 km</option><option value="3000">3 km</option></select></label>
+      <label class="f">Sortuj
+        <select name="sortuj" form="fs"><option value="odleglosc">odległość</option><option value="cena_m2">zł/m², od najtańszych</option>
+          <option value="cena">cena, od najtańszych</option><option value="metraz">metraż, od największych</option>
+          <option value="najnowsze">najnowsze</option></select></label>
+      <div class="f range" role="group" aria-label="Metraż w m²"><span>Metraż, m²</span>
+        <input name="metraz_od" form="fs" inputmode="decimal" placeholder="od" aria-label="metraż od">
+        <input name="metraz_do" form="fs" inputmode="decimal" placeholder="do" aria-label="metraż do"></div>
+      <div class="f range" role="group" aria-label="Cena w zł"><span>Cena, zł</span>
+        <input name="cena_od" form="fs" inputmode="numeric" placeholder="od" aria-label="cena od">
+        <input name="cena_do" form="fs" inputmode="numeric" placeholder="do" aria-label="cena do"></div>
+    </div>
+    <details class="more" id="more">
+      <summary>Więcej filtrów<span id="more-count" class="badge" hidden></span></summary>
+      <div class="fgrid">
+        <div class="f range" role="group" aria-label="Cena za m²"><span>Cena za m², zł</span>
+          <input name="cena_m2_od" form="fs" inputmode="numeric" placeholder="od" aria-label="zł za m² od">
+          <input name="cena_m2_do" form="fs" inputmode="numeric" placeholder="do" aria-label="zł za m² do"></div>
+        <div class="f range" role="group" aria-label="Pokoje"><span>Pokoje</span>
+          <input name="pokoje_od" form="fs" inputmode="numeric" placeholder="od" aria-label="pokoje od">
+          <input name="pokoje_do" form="fs" inputmode="numeric" placeholder="do" aria-label="pokoje do"></div>
+        <div class="f range" role="group" aria-label="Piętro"><span>Piętro</span>
+          <input name="pietro_od" form="fs" inputmode="numeric" placeholder="od" aria-label="piętro od">
+          <input name="pietro_do" form="fs" inputmode="numeric" placeholder="do" aria-label="piętro do"></div>
+        <label class="f">Rynek
+          <select name="rynek" form="fs"><option value="">dowolny</option><option value="wtorny">wtórny</option>
+            <option value="pierwotny">pierwotny</option></select></label>
+        <label class="f">Deweloperzy
+          <select name="deweloperzy" form="fs"><option value="grupuj">grupuj w inwestycje</option>
+            <option value="ukryj">ukryj</option><option value="tylko">tylko oni</option></select></label>
+        <label class="f">Nowe z ostatnich
+          <select name="nowe_dni" form="fs"><option value="">dowolnie</option><option value="1">1 dnia</option>
+            <option value="3">3 dni</option><option value="7">7 dni</option><option value="14">14 dni</option>
+            <option value="30">30 dni</option></select></label>
+      </div>
+      <div class="chips" role="group" aria-label="Opcje">
+        <label class="chip"><input type="checkbox" name="bez_parteru" value="1" form="fs"><span>bez parteru</span></label>
+        <label class="chip"><input type="checkbox" name="tylko_aktualne" value="1" form="fs"><span>tylko widziane w ostatnim wyszukiwaniu</span></label>
+      </div>
+      <fieldset class="chips"><legend>Portale <span class="hint">nic nie zaznaczone: wszystkie</span></legend>
+        <label class="chip"><input type="checkbox" name="portale" value="olx" form="fs"><span>OLX</span></label>
+        <label class="chip"><input type="checkbox" name="portale" value="otodom" form="fs"><span>Otodom</span></label>
+        <label class="chip"><input type="checkbox" name="portale" value="nieruchomosci-online" form="fs"><span>Nieruchomosci-online</span></label>
+        <label class="chip"><input type="checkbox" name="portale" value="morizon" form="fs"><span>Morizon</span></label>
+      </fieldset>
+      <fieldset class="chips"><legend>Zabudowa <span class="hint">podaje tylko OLX</span></legend>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="blok" form="fs"><span>blok</span></label>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="kamienica" form="fs"><span>kamienica</span></label>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="apartamentowiec" form="fs"><span>apartamentowiec</span></label>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="dom wolnostojący" form="fs"><span>dom wolnostojący</span></label>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="szeregowiec" form="fs"><span>szeregowiec</span></label>
+        <label class="chip"><input type="checkbox" name="zabudowa" value="pozostałe" form="fs"><span>pozostałe</span></label>
+      </fieldset>
+      <fieldset class="fgrid"><legend>Z dala od <span class="hint">OSM, w linii prostej od punktu oferty</span></legend>
+        <label class="f">linii 110–400 kV <select name="z_dala_linie" form="fs"></select></label>
+        <label class="f">kolei <select name="z_dala_kolej" form="fs"></select></label>
+        <label class="f">drogi głównej <select name="z_dala_droga" form="fs"></select></label>
+        <label class="f">przemysłu <select name="z_dala_przemysl" form="fs"></select></label>
+      </fieldset>
+    </details>
+    <div class="factions">
+      <button type="submit" form="fs">Szukaj ofert</button>
+      <button type="button" class="linkish" id="f-reset">Wyczyść filtry</button>
+      <button type="button" class="linkish" id="pin-from-card" hidden>Pinezka w miejscu karty</button>
+    </div>
+  </details>
   <div id="map" role="region" aria-label="Mapa: oferta, sprzedaże z RCN, podobne oferty i otoczenie"></div>
   <div id="panel" aria-live="polite">
     <div class="empty" id="empty">
@@ -406,13 +450,15 @@ const control = L.control.layers(null, null, {collapsed: true}).addTo(map);
 let layers = [], saleMarkers = [], similarMarkers = [], catLayers = {}, nearestLayer = {}, lit = null, lastCenter = null;
 
 const legend = L.control({position: "bottomright"});
-legend.onAdd = () => {
-  const d = L.DomUtil.create("details", "legend");
-  d.open = window.innerWidth >= 1024;
-  d.innerHTML = `<summary>Legenda</summary>
-    <span class="key" style="background:${css("--cheap")}"></span>sprzedaż poniżej typowej ceny<br>
+function legendHtml(m) {
+  const price = `<span class="key" style="background:${css("--cheap")}"></span>cena poniżej typowej (RCN)<br>
     <span class="key" style="background:${css("--typical")}"></span>w typowym zakresie<br>
-    <span class="key" style="background:${css("--dear")}"></span>powyżej typowej ceny<br>
+    <span class="key" style="background:${css("--dear")}"></span>powyżej typowej<br>`;
+  if (m === "szukaj") return `<summary>Legenda</summary>${price}
+    <span class="key" style="border:2px solid ${css("--ink")}"></span>kilka ofert blisko siebie (przybliż)<br>
+    <span class="key" style="border-radius:3px;border:2px solid ${css("--ink")}"></span>inwestycja lub budynek: liczba ofert<br>
+    <span class="key" style="background:#2a81cb;border-radius:50% 50% 50% 0"></span>pinezka: środek wyszukiwania`;
+  return `<summary>Legenda</summary>${price}
     <span class="key" style="border:3px solid ${css("--ink")}"></span>obwódka: budynek do 10 lat<br>
     <span class="key" style="border:4px solid ${css("--ink")};width:16px;height:16px;vertical-align:-4px"></span>oferta<br>
     <span class="key" style="border-radius:0;border:2px solid ${css("--ink")}"></span>podobna oferta (numer z listy)<br>
@@ -420,8 +466,14 @@ legend.onAdd = () => {
     ${swatch("kolej")}kolej<br>${swatch("tramwaj")}tramwaj<br>${swatch("droga_glowna")}droga główna<br>
     ${swatch("przemysl")}przemysł, składowisko, lotnisko<br>${swatch("droga_w_budowie")}droga w budowie<br>
     ${swatch("droga_planowana")}droga planowana<br>${swatch("szkola")}szkoła, przedszkole, przystanek`;
-  L.DomEvent.disableClickPropagation(d);
-  return d;
+}
+let legendBox = null;
+legend.onAdd = () => {
+  legendBox = L.DomUtil.create("details", "legend");
+  legendBox.open = window.innerWidth >= 1024;
+  legendBox.innerHTML = legendHtml("karta");
+  L.DomEvent.disableClickPropagation(legendBox);
+  return legendBox;
 };
 legend.addTo(map);
 
@@ -672,7 +724,8 @@ function setMode(m) {
   mode = m;
   $("tab-card").setAttribute("aria-selected", String(m === "karta"));
   $("tab-search").setAttribute("aria-selected", String(m === "szukaj"));
-  $("f").hidden = m !== "karta"; $("fs").hidden = m !== "szukaj";
+  $("f").hidden = m !== "karta"; $("fs").hidden = m !== "szukaj"; $("filters").hidden = m !== "szukaj";
+  if (legendBox) { const open = legendBox.open; legendBox.innerHTML = legendHtml(m); legendBox.open = open; }
   const cardShown = !$("result").hidden || !$("empty").hidden;
   $("empty").hidden = m !== "karta" || !$("result").hidden;
   $("result").hidden = m !== "karta" || $("result").dataset.filled !== "1";
@@ -832,7 +885,40 @@ async function runSearch(params) {
     go.disabled = false; go.textContent = "Szukaj ofert"; $("panel").removeAttribute("aria-busy");
   }
 }
-$("fs").addEventListener("submit", ev => { ev.preventDefault(); runSearch(searchParams(ev.target).toString()); });
+$("fs").addEventListener("submit", ev => {
+  ev.preventDefault();
+  if (window.innerWidth < 1024) $("filters").open = false;     // phone: show the map, not the form
+  runSearch(searchParams(ev.target).toString());
+});
+
+// One line that says what is filtered, so the folded panel still tells the truth.
+const MAIN = new Set(["promien", "sortuj", "metraz_od", "metraz_do", "cena_od", "cena_do"]);
+function filterSummary() {
+  const el = $("fs").elements, v = n => (el[n] && el[n].value || "").trim();
+  const parts = [el.promien.selectedOptions[0].textContent];
+  if (v("metraz_od") || v("metraz_do")) parts.push(`${v("metraz_od") || "…"}–${v("metraz_do") || "…"} m²`);
+  if (v("cena_od") || v("cena_do")) parts.push(`${v("cena_od") || "…"}–${v("cena_do") || "…"} zł`);
+  let more = 0;
+  for (const c of document.querySelectorAll('[form="fs"]')) {
+    if (MAIN.has(c.name) || c.name === "gdzie") continue;
+    if (c.type === "checkbox" ? c.checked : c.value && !(c.name === "deweloperzy" && c.value === "grupuj")) more++;
+  }
+  if (more) parts.push(`jeszcze ${more}`);
+  $("f-sum").textContent = parts.join(", ");
+  $("more-count").hidden = !more; $("more-count").textContent = String(more);
+}
+document.querySelectorAll('[form="fs"]').forEach(c => c.addEventListener("change", filterSummary));
+document.querySelectorAll('input[form="fs"]').forEach(c => c.addEventListener("input", filterSummary));
+$("f-reset").addEventListener("click", () => {
+  document.querySelectorAll('[form="fs"]').forEach(c => {
+    if (c.type === "checkbox") c.checked = false;
+    else if (c.tagName === "SELECT") c.selectedIndex = c.name === "promien" ? 1 : 0;
+    else c.value = "";
+  });
+  filterSummary();
+});
+$("filters").open = window.innerWidth >= 1024;
+filterSummary();
 
 // A shared address fills the form and runs straight away: ?link=… or ?ulica=… (card), ?tryb=szukaj&… (search).
 (() => {
@@ -842,12 +928,13 @@ $("fs").addEventListener("submit", ev => { ev.preventDefault(); runSearch(search
     const fs = $("fs").elements;
     for (const [k, v] of q) {
       if (k === "portale" || k === "zabudowa") v.split(",").forEach(x => {
-        const box = [...document.querySelectorAll(`#fs input[name="${k}"]`)].find(b => b.value === x); if (box) box.checked = true; });
+        const box = [...document.querySelectorAll(`input[form="fs"][name="${k}"]`)].find(b => b.value === x); if (box) box.checked = true; });
       else if (k === "link" || k === "ulica") $("gdzie").value = v;
       else if (fs[k] && fs[k].type === "checkbox") fs[k].checked = v === "1";
       else if (fs[k]) fs[k].value = v;
     }
     if (q.get("lat") && q.get("lon")) placePin(L.latLng(+q.get("lat"), +q.get("lon")));
+    filterSummary();
     q.delete("tryb");
     runSearch(q.toString());
     return;

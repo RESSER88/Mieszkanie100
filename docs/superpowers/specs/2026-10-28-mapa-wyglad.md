@@ -19,3 +19,15 @@ Prośba użytkownika: czytelniejsza strona bez utraty szybkości, opisy podzielo
 - Położenie: punkt z ogłoszenia (OLX oznacza je jako przybliżone), a gdy go nie ma (wyniki Otodom), środek ulicy z RCN. Strona pokazuje, które z nich.
 - To samo mieszkanie na dwóch portalach (`portale.same_offer`) pokazane raz, z dopiskiem „także …”. Oferta z karty i jej kopie są pominięte.
 - Środek ulicy liczony z indeksu ulic (`okolica.street_index`, sumy współrzędnych na ulicę), a nie przez przeglądanie 41 tys. rekordów dla każdej oferty.
+
+## Poprawka układu po dodaniu wyszukiwania (2026-10-29)
+
+Zgłoszenie: „coś się rozjechało”. Pomiar w przeglądarce: w trybie wyszukiwania nagłówek miał 517 px na komputerze i 1160 px na telefonie (wszystkie filtry w nagłówku), mapa była poniżej ekranu, pary „od–do” rozrywały się między wierszami, 13 elementów miało mniej niż 32 px wysokości.
+
+Poprawka (Impeccable: tryb Operate i progi z craft-floor; Taste Skill: zasady ekranów aplikacji, pierwszy ekran ma pokazać mapę i wynik; UI UX Pro Max: cele dotyku 44 px, widoczne etykiety, stopniowe odsłanianie):
+
+- Nagłówek to tylko pole „gdzie” i przycisk. Filtry są osobnym panelem: na komputerze w prawej kolumnie nad wynikami, na telefonie jedna linia z podsumowaniem („1 km, 60–130 m², jeszcze 2”) nad mapą, rozwijana na dotknięcie i zwijana po wyszukaniu.
+- Siatka dwóch kolumn; zakresy „od–do” zawsze w jednym wierszu pod jedną etykietą; pola i listy 44 px; portale, zabudowa i opcje jako przełączniki 40 px.
+- „Więcej filtrów” z liczbą aktywnych ukrytych filtrów; „Wyczyść filtry”.
+- Legenda zależy od trybu (w wyszukiwaniu: kolory cen, skupiska, inwestycje, pinezka).
+- Wynik po poprawce: nagłówek 138 px (komputer), 211 px (telefon), brak przewijania w bok na 390, 820 i 1440 px, brak błędów JavaScript.
