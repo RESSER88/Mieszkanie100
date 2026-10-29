@@ -131,6 +131,55 @@ class CardJsonTests(unittest.TestCase):
                                                    "promien": "99999"})[0], 400)
 
 
+class AreaSearchJsonTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ctx = build(self.tmp.name)
+        from rcn.olx import OfferStore
+        north = lambda m: tk.LAT + m / 111200.0    # noqa: E731
+        offers = [{"portal": "olx", "id": str(i), "url": "https://www.olx.pl/d/oferta/%d" % i, "tytul": "M%d" % i,
+                   "cena": 900000 + 10000 * i, "powierzchnia_m2": 60.0 + 5 * i, "cena_m2": 10000.0, "ulica": None,
+                   "miejscowosc": "Katowice", "lat": north(100 * i), "lon": tk.LON, "lokalizacja_przyblizona": True}
+                  for i in range(1, 8)]
+        store = OfferStore(self.ctx.oferty_db)
+        store.upsert(offers, "2026-10-29")
+        store.close()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_pin_area_range_and_radius(self):
+        status, body = mapa.search_json(self.ctx, {"lat": str(tk.LAT), "lon": str(tk.LON), "promien": "500",
+                                                   "metraz_od": "65", "metraz_do": "80"})
+        self.assertEqual(status, 200, body)
+        ids = [o["id"] for g in body["grupy"] for o in g["oferty"]]
+        self.assertEqual(ids, ["1", "2", "3", "4"])     # 65–80 m² inclusive; 5 (85 m²) is out of range
+        self.assertEqual(body["liczba_ofert"], 4)
+        self.assertIn("olx", body["zrodla"])
+        self.assertEqual(body["zrodla"]["olx"]["ostatnio"], "2026-10-29")
+        self.assertIn("rcn", body)
+
+    def test_filters_sort_and_nuisance_distance(self):
+        base = {"lat": str(tk.LAT), "lon": str(tk.LON), "promien": "1000"}
+        status, body = mapa.search_json(self.ctx, dict(base, cena_do="940000", sortuj="cena"))
+        self.assertEqual([o["id"] for g in body["grupy"] for o in g["oferty"]], ["1", "2", "3", "4"])
+        self.assertEqual(body["przed_filtrami"], 7)
+        status, body = mapa.search_json(self.ctx, dict(base, sortuj="metraz"))
+        self.assertEqual(body["grupy"][0]["oferty"][0]["id"], "7")             # the largest first
+        status, body = mapa.search_json(self.ctx, dict(base, z_dala_linie="200"))
+        kept = [o["id"] for g in body["grupy"] for o in g["oferty"]]
+        self.assertEqual(kept, ["1", "2", "3"])
+        self.assertEqual(mapa.search_json(self.ctx, dict(base, rynek="inny"))[0], 400)
+
+    def test_position_from_street_and_errors(self):
+        status, body = mapa.search_json(self.ctx, {"ulica": "Szurmana", "metraz_od": "60"})
+        self.assertEqual(status, 200, body)
+        self.assertTrue(body["przyblizone"])
+        self.assertEqual(mapa.search_json(self.ctx, {})[0], 400)
+        self.assertEqual(mapa.search_json(self.ctx, {"lat": "50.2", "lon": "19", "promien": "9000"})[0], 400)
+        self.assertEqual(mapa.search_json(self.ctx, {"lat": "x", "lon": "19"})[0], 400)
+
+
 class MapSelectionTests(unittest.TestCase):
     def item(self, cat, dist, gtype="LineString", coords=None):
         return {"kategoria": cat, "nazwa": None, "odleglosc_m": dist, "szczegoly": "", "typ_geometrii": gtype,

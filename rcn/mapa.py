@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rcn import karta, okolica, otoczenie, podobne, wiek  # noqa: E402
+from rcn import filtry, karta, okolica, otoczenie, podobne, wiek  # noqa: E402
 
 PORTALS = ("otodom.pl", "olx.pl", "gratka.pl", "nieruchomosci-online.pl", "morizon.pl", "domiporta.pl",
            "adresowo.pl", "rynekpierwotny.pl")
@@ -219,6 +219,105 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
     }
 
 
+def _float(params: Dict[str, str], key: str) -> Optional[float]:
+    text = (params.get(key) or "").strip().replace(",", ".")
+    return float(text) if text else None
+
+
+def search_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]]:
+    """(HTTP status, JSON body) for /api/szukaj: saved offers of a chosen size around a pin, a link or a street."""
+    try:
+        f = filtry.parse(params)
+    except filtry.FilterError as exc:
+        return 400, {"ok": False, "blad": str(exc)}
+    try:
+        radius = _float(params, "promien") or 1000.0
+        lat, lon = _float(params, "lat"), _float(params, "lon")
+        if not 100 <= radius <= 3000:
+            raise ValueError
+    except ValueError:
+        return 400, {"ok": False, "blad": "promień 100–3000 m, położenie liczbami"}
+    area_min, area_max = f.metraz_od, f.metraz_do
+    approximate = False
+    try:
+        if lat is not None and lon is not None:
+            center = otoczenie.wgs84_to_pl1992(lat, lon)
+        elif (params.get("link") or "").strip():
+            link = params["link"].strip()
+            if not allowed_link(link):
+                return 400, {"ok": False, "blad": "obsługiwane są tylko linki do portali: " + ", ".join(PORTALS)}
+            offer = karta.offer_from_link(link, oferty_db=ctx.oferty_db)
+            if offer.get("y_pl1992") is not None:
+                center = (offer["y_pl1992"], offer["x_pl1992"])
+            elif offer.get("lat") is not None and offer.get("lon") is not None:
+                center = otoczenie.wgs84_to_pl1992(offer["lat"], offer["lon"])
+            else:
+                raise karta.CardError("ogłoszenie nie podaje położenia; postaw pinezkę na mapie")
+            approximate = bool(offer.get("lokalizacja_przyblizona"))
+        elif (params.get("ulica") or "").strip():
+            found = okolica.center_from_index(ctx.streets, params["ulica"], params.get("miasto") or "Katowice")
+            if found is None:
+                raise karta.CardError("nie znaleziono ulicy '%s' w bazie RCN" % params["ulica"])
+            center, approximate = found[:2], True
+        else:
+            return 400, {"ok": False, "blad": "postaw pinezkę na mapie, wklej link albo wpisz ulicę"}
+    except karta.CardError as exc:
+        return 422, {"ok": False, "blad": str(exc)}
+    found = podobne.offers_in_area(ctx.oferty_db, ctx.streets, center, radius, area_min, area_max)
+    freshness = _store_freshness(ctx.oferty_db)
+    latest = {portal: info["ostatnio"] for portal, info in freshness.items()}
+    today = ctx.today or date.today()
+    offers = [o for o in found if filtry.keep(o, f, latest, today)]
+    if f.z_dala and offers:
+        offers = _away_from_nuisances(ctx, offers, f.z_dala)
+    offers = filtry.sort(offers, f.sortuj)
+    groups = podobne.group_offers(offers)
+    date_from = okolica.months_ago(today, 24).isoformat()
+    rcn = sqlite3.connect(ctx.rcn_db)
+    try:
+        rows, _ = okolica.transactions_in_radius(rcn, center, radius, date_from, today.isoformat(), area_min, area_max)
+    finally:
+        rcn.close()
+    return 200, {
+        "ok": True, "srodek": _latlon(*center), "przyblizone": approximate, "promien_m": radius,
+        "metraz_od": area_min, "metraz_do": area_max, "liczba_ofert": len(offers),
+        "przed_filtrami": len(found), "limit_osiagniety": len(found) >= podobne.AREA_CAP, "grupy": groups,
+        "sortuj": f.sortuj, "deweloperzy": f.deweloperzy,
+        "rcn": [{"etykieta": label, **_summary(okolica.summarize([r for r in rows if r["rodzaj_rynku"] == key]))}
+                for key, label in okolica.MARKETS],
+        "zrodla": freshness,
+    }
+
+
+def _away_from_nuisances(ctx: Context, offers: List[dict], away: Dict[str, float]) -> List[dict]:
+    """Offers with no object of the chosen nuisance kinds closer than the given distance (OSM, offer point)."""
+    if not os.path.exists(ctx.osm_db):
+        return offers
+    osm = otoczenie.connect(ctx.osm_db)
+    try:
+        kept = []
+        for o in offers:
+            point = otoczenie.wgs84_to_pl1992(*o["punkt"])
+            if all(not otoczenie.nearby(osm, point, distance, filtry.NUISANCES[key])
+                   for key, distance in away.items()):
+                kept.append(o)
+        return kept
+    finally:
+        osm.close()
+
+
+def _store_freshness(path: str) -> Dict[str, Dict[str, Any]]:
+    """Per portal: number of saved offers and the last day a search saw any of them."""
+    if not os.path.exists(path):
+        return {}
+    con = sqlite3.connect(path)
+    try:
+        return {portal: {"oferty": n, "ostatnio": last} for portal, n, last in
+                con.execute("SELECT portal, COUNT(*), MAX(ostatnio) FROM oferty GROUP BY portal")}
+    finally:
+        con.close()
+
+
 def make_handler(ctx: Context):
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, body: bytes, kind: str) -> None:
@@ -233,10 +332,10 @@ def make_handler(ctx: Context):
             parts = urllib.parse.urlsplit(self.path)
             if parts.path == "/":
                 self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
-            elif parts.path == "/api/karta":
+            elif parts.path in ("/api/karta", "/api/szukaj"):
                 params = {k: v[-1] for k, v in urllib.parse.parse_qs(parts.query).items()}
                 try:
-                    status, body = card_json(ctx, params)
+                    status, body = (card_json if parts.path == "/api/karta" else search_json)(ctx, params)
                 except Exception as exc:  # keep the server up; the message goes to the page and the terminal
                     self.log_error("błąd karty: %r", exc)
                     status, body = 500, {"ok": False, "blad": "błąd programu: %s" % exc}

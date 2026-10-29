@@ -92,3 +92,48 @@ class SimilarTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AreaSearchTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = os.path.join(self.tmp.name, "oferty.sqlite")
+        north = lambda m: tk.LAT + m / 111200.0    # noqa: E731
+        offers = [offer("olx", "a", 95.0, 1100000, north(200), tk.LON),
+                  offer("olx", "b", 130.0, 1500000, north(250), tk.LON),
+                  offer("olx", "c", 70.0, 700000, north(260), tk.LON),                    # too small
+                  offer("olx", "d", 110.0, 1200000, north(5000), tk.LON)]                 # too far
+        dev = [offer("otodom", "u%d" % i, 100.0 + i, 1000000 + 20000 * i, north(600), tk.LON) for i in range(4)]
+        for o in dev:
+            o["inwestycja"], o["rynek"] = "Ogrody Panewnickie", "pierwotny"
+        store = OfferStore(self.db)
+        store.upsert(offers + dev, "2026-10-29")
+        store.close()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_all_offers_in_range_and_radius(self):
+        found = podobne.offers_in_area(self.db, [], CENTER, 1000.0, 90.0, 140.0)
+        self.assertEqual([o["id"] for o in found], ["a", "b", "u0", "u1", "u2", "u3"])
+
+    def test_development_units_grouped(self):
+        groups = podobne.group_offers(podobne.offers_in_area(self.db, [], CENTER, 1000.0, 90.0, 140.0))
+        dev = [g for g in groups if g["inwestycja"]]
+        self.assertEqual(len(dev), 1)
+        g = dev[0]
+        self.assertEqual((g["nazwa"], g["liczba"]), ("Ogrody Panewnickie", 4))
+        self.assertEqual((g["metraz_od"], g["metraz_do"]), (100.0, 103.0))
+        self.assertEqual(len(groups), 3)                       # a, b and the development
+
+    def test_offers_at_one_point_grouped_without_investment_name(self):
+        north = tk.LAT + 300 / 111200.0
+        same = [offer("olx", "p%d" % i, 100.0, 1000000 + 50000 * i, north, tk.LON) for i in range(3)]
+        db = os.path.join(self.tmp.name, "punkt.sqlite")
+        store = OfferStore(db)
+        store.upsert(same, "2026-10-29")
+        store.close()
+        groups = podobne.group_offers(podobne.offers_in_area(db, [], CENTER, 1000.0, 90.0, 140.0))
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["liczba"], 3)
+        self.assertIsNone(groups[0]["inwestycja"])

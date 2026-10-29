@@ -8,6 +8,10 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+      integrity="sha256-YU3qCpj/P06tdPBJGPax0bm6Q1wltfwjsho5TR4+TYc=" crossorigin="">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+        integrity="sha256-Hk4dIpcqOSb0hZjgyvFOP+cEmDXUKKNE/tT542ZbNQg=" crossorigin=""></script>
 <style>
   /* Tokens. Price scale: blue cheaper, grey typical, red dearer (dataviz diverging pair).
      Aqua only for everyday places; nuisances are graphite so they never compete with prices. */
@@ -78,6 +82,35 @@
   #status { margin: 0; font-size: 14px; color: var(--ink-2); min-height: 21px; }
   #status.err { color: var(--dear); font-weight: 600; }
 
+  .side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+  .modes { display: flex; gap: 4px; }
+  .modes button { min-height: 36px; padding: 0 12px; background: transparent; color: var(--ink-2); border: 1px solid var(--line-2);
+                  font-weight: 500; }
+  .modes button[aria-selected="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); font-weight: 600; }
+  #fs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  #fs[hidden], #f[hidden] { display: none; }
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 14px; color: var(--ink-2);
+             border: 0; margin: 0; padding: 0; min-width: 0; }
+  .filters label { display: inline-flex; align-items: center; gap: 6px; }
+  .filters input:not([type=checkbox]) { min-height: 36px; padding: 4px 8px; width: auto; }
+  .filters select { min-height: 36px; padding: 4px 8px; }
+  .filters input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ink); min-height: 0; }
+  fieldset.filters { margin-top: 8px; }
+  fieldset.filters legend { font-weight: 600; color: var(--ink); padding: 0; margin-bottom: 4px; font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); }
+  details.more > summary { cursor: pointer; color: var(--ink-2); font-size: 14px; min-height: 36px; display: inline-flex;
+                           align-items: center; }
+  details.more[open] { padding-bottom: 6px; }
+  #s-list tbody tr { cursor: pointer; }
+  #s-list tbody tr:hover td { background: var(--ground); }
+  tr.grp-unit td:first-child { padding-left: 28px; }
+  tr.grp-head[aria-expanded="true"] td { background: var(--band); }
+  .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
+           background: var(--ink); color: var(--ground); font-size: 11.5px; font-weight: 700; margin-right: 6px; }
+  .mc { display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink);
+        border: 2px solid var(--ink); font: 700 12px/1 system-ui, sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .grp { display: grid; place-items: center; width: 28px !important; height: 28px !important; margin: -14px 0 0 -14px !important;
+         border-radius: 4px; border: 2px solid var(--ink); color: var(--ink); font: 700 11px/1 system-ui, sans-serif; }
   /* Work area: map left (sticky), findings right. Phone: stacked. */
   .work { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); }
   #map { height: 56vh; min-height: 300px; background: var(--band); }
@@ -180,7 +213,12 @@
       </svg>
       Mieszkanie100
     </div>
-    <form id="f" class="side" novalidate>
+    <div class="side">
+    <div class="modes" role="tablist" aria-label="Tryb">
+      <button type="button" role="tab" id="tab-card" aria-selected="true" aria-controls="f">Karta oferty</button>
+      <button type="button" role="tab" id="tab-search" aria-selected="false" aria-controls="fs">Szukaj w okolicy</button>
+    </div>
+    <form id="f" novalidate>
       <div class="ask">
         <label class="sr" for="link">Link do ogłoszenia</label>
         <input id="link" name="link" type="url" inputmode="url" autocomplete="off"
@@ -202,8 +240,66 @@
             <label>Rok budowy <input name="rok" inputmode="numeric"></label>
           </div>
         </div>
-      <p id="status" role="status" aria-live="polite"></p>
     </form>
+    <form id="fs" novalidate hidden>
+      <div class="ask">
+        <label class="sr" for="gdzie">Ulica albo link do ogłoszenia</label>
+        <input id="gdzie" name="gdzie" autocomplete="off"
+               placeholder="Kliknij mapę, żeby postawić pinezkę, albo wpisz ulicę lub wklej link">
+        <button id="go-s" type="submit">Szukaj ofert</button>
+      </div>
+      <div class="filters">
+        <label>Promień <select name="promien"><option>500</option><option selected>1000</option><option>2000</option>
+          <option>3000</option></select> m</label>
+        <label>Metraż od <input name="metraz_od" inputmode="decimal" size="4"></label>
+        <label>do <input name="metraz_do" inputmode="decimal" size="4"> m²</label>
+        <label>Cena do <input name="cena_do" inputmode="numeric" size="8"> zł</label>
+        <label>Rynek <select name="rynek"><option value="">dowolny</option><option value="wtorny">wtórny</option>
+          <option value="pierwotny">pierwotny</option></select></label>
+        <label>Deweloperzy <select name="deweloperzy"><option value="grupuj">grupuj w inwestycje</option>
+          <option value="ukryj">ukryj</option><option value="tylko">tylko oni</option></select></label>
+        <label>Sortuj <select name="sortuj"><option value="odleglosc">odległość</option><option value="cena_m2">zł/m²</option>
+          <option value="cena">cena</option><option value="metraz">metraż, od największych</option>
+          <option value="najnowsze">najnowsze</option></select></label>
+        <button type="button" class="linkish" id="pin-from-card" hidden>Pinezka w miejscu karty</button>
+      </div>
+      <details class="more">
+        <summary>Więcej filtrów</summary>
+        <div class="filters">
+          <label>Cena od <input name="cena_od" inputmode="numeric" size="8"> zł</label>
+          <label>zł/m² od <input name="cena_m2_od" inputmode="numeric" size="6"></label>
+          <label>do <input name="cena_m2_do" inputmode="numeric" size="6"></label>
+          <label>Pokoje od <input name="pokoje_od" inputmode="numeric" size="2"></label>
+          <label>do <input name="pokoje_do" inputmode="numeric" size="2"></label>
+          <label>Piętro od <input name="pietro_od" inputmode="numeric" size="2"></label>
+          <label>do <input name="pietro_do" inputmode="numeric" size="2"></label>
+          <label class="check"><input type="checkbox" name="bez_parteru" value="1"> bez parteru</label>
+        </div>
+        <fieldset class="filters"><legend>Portale</legend>
+          <label class="check"><input type="checkbox" name="portale" value="olx"> OLX</label>
+          <label class="check"><input type="checkbox" name="portale" value="otodom"> Otodom</label>
+          <span class="hint">nic nie zaznaczone: wszystkie</span></fieldset>
+        <fieldset class="filters"><legend>Zabudowa (z OLX)</legend>
+          <label class="check"><input type="checkbox" name="zabudowa" value="blok"> blok</label>
+          <label class="check"><input type="checkbox" name="zabudowa" value="kamienica"> kamienica</label>
+          <label class="check"><input type="checkbox" name="zabudowa" value="apartamentowiec"> apartamentowiec</label>
+          <label class="check"><input type="checkbox" name="zabudowa" value="dom wolnostojący"> dom wolnostojący</label>
+          <label class="check"><input type="checkbox" name="zabudowa" value="szeregowiec"> szeregowiec</label>
+          <label class="check"><input type="checkbox" name="zabudowa" value="pozostałe"> pozostałe</label></fieldset>
+        <fieldset class="filters"><legend>Z dala od (OSM, w linii prostej od punktu oferty)</legend>
+          <label>linii 110–400 kV <select name="z_dala_linie"></select></label>
+          <label>kolei <select name="z_dala_kolej"></select></label>
+          <label>drogi głównej <select name="z_dala_droga"></select></label>
+          <label>przemysłu <select name="z_dala_przemysl"></select></label></fieldset>
+        <div class="filters">
+          <label>Nowe z ostatnich <select name="nowe_dni"><option value="">dowolnie</option><option>1</option><option>3</option>
+            <option>7</option><option>14</option><option>30</option></select> dni</label>
+          <label class="check"><input type="checkbox" name="tylko_aktualne" value="1"> tylko widziane w ostatnim wyszukiwaniu</label>
+        </div>
+      </details>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    </div>
   </div>
 </header>
 <main class="work">
@@ -216,6 +312,20 @@
            wiek budynku, podobne oferty z zapisanych wyników wyszukiwania i otoczenie z OpenStreetMap.</p>
         <p>Bez linku: rozwiń „Wpisz dane ręcznie” i podaj ulicę, cenę i metraż. Położenie będzie wtedy środkiem ulicy.</p>
       </section>
+    </div>
+    <div class="empty" id="s-empty" hidden>
+      <section>
+        <h2>Szukaj ofert w okolicy</h2>
+        <p>Kliknij mapę, żeby postawić pinezkę (można ją przesunąć), albo wpisz ulicę lub wklej link do ogłoszenia.
+           Ustaw metraż i inne filtry, potem „Szukaj ofert”.</p>
+        <p>Oferty pochodzą z zapisanych wyników wyszukiwania OLX i Otodom na Raspberry Pi, więc są tak świeże jak ostatnie
+           uruchomienie <code>rcn/olx.py szukaj</code> i <code>rcn/otodom.py szukaj</code>.</p>
+      </section>
+    </div>
+    <div id="s-result" hidden>
+      <section><h2 id="s-head">Oferty w okolicy</h2><p class="verdict-sub" id="s-sub"></p><div id="s-rcn"></div>
+        <p class="note" id="s-fresh"></p></section>
+      <section><div id="s-list"></div></section>
     </div>
     <div id="result" hidden>
       <section id="s-cena">
@@ -520,7 +630,7 @@ async function run(params) {
     const d = await r.json();
     if (!d.ok) { st.className = "err"; st.textContent = d.blad; return; }
     st.textContent = `Sprzedaży na mapie: ${d.transakcje.length}. Podobnych ofert: ${d.podobne.length}.`;
-    $("empty").hidden = true; $("result").hidden = false;
+    $("empty").hidden = true; $("result").hidden = false; $("result").dataset.filled = "1";
     renderPrice(d); renderOffer(d); renderSimilar(d); renderAround(d); renderSales(d);
     $("card").textContent = d.karta;
     drawMap(d);
@@ -548,9 +658,197 @@ $("f").addEventListener("submit", ev => {
     .filter(([k, v]) => v && (!manual.has(k) || useManual))).toString());
 });
 
-// A shared address (?link=… or ?ulica=…) fills the form and shows the card straight away.
+// ---- Search mode: saved offers of a chosen size around a pin, a street or a link ----
+let mode = "karta", pin = null, searchLayers = [], searchMarkers = [];
+const DIST = ["", "100", "200", "300", "500", "1000"];
+["z_dala_linie", "z_dala_kolej", "z_dala_droga", "z_dala_przemysl"].forEach(n => {
+  $("fs").elements[n].innerHTML = DIST.map(v => `<option value="${v}">${v ? v + " m" : "bez znaczenia"}</option>`).join("");
+});
+
+function setMode(m) {
+  mode = m;
+  $("tab-card").setAttribute("aria-selected", String(m === "karta"));
+  $("tab-search").setAttribute("aria-selected", String(m === "szukaj"));
+  $("f").hidden = m !== "karta"; $("fs").hidden = m !== "szukaj";
+  const cardShown = !$("result").hidden || !$("empty").hidden;
+  $("empty").hidden = m !== "karta" || !$("result").hidden;
+  $("result").hidden = m !== "karta" || $("result").dataset.filled !== "1";
+  $("s-result").hidden = m !== "szukaj" || $("s-result").dataset.filled !== "1";
+  $("s-empty").hidden = m !== "szukaj" || !$("s-result").hidden;
+  layers.forEach(l => m === "karta" ? l.addTo(map) : map.removeLayer(l));
+  searchLayers.forEach(l => m === "szukaj" ? l.addTo(map) : map.removeLayer(l));
+  if (pin) m === "szukaj" ? pin.addTo(map) : map.removeLayer(pin);
+  $("pin-from-card").hidden = !lastCenter;
+  $("status").textContent = ""; $("status").className = "";
+  void cardShown;
+}
+$("tab-card").addEventListener("click", () => setMode("karta"));
+$("tab-search").addEventListener("click", () => setMode("szukaj"));
+
+function placePin(ll) {
+  if (!pin) {
+    pin = L.marker(ll, {draggable: true, title: "Środek wyszukiwania", keyboard: true});
+    pin.on("dragend", () => { $("gdzie").value = ""; });
+  }
+  pin.setLatLng(ll).addTo(map);
+  $("gdzie").value = "";
+  $("status").className = ""; $("status").textContent = "Pinezka postawiona. Ustaw filtry i naciśnij „Szukaj ofert”.";
+}
+map.on("click", ev => { if (mode === "szukaj") placePin(ev.latlng); });
+$("pin-from-card").addEventListener("click", () => { if (lastCenter) { placePin(L.latLng(lastCenter)); map.setView(lastCenter, 15); } });
+
+function searchParams(form) {
+  const q = new URLSearchParams();
+  const multi = {};
+  for (const [k, v] of new FormData(form)) {
+    if (!v) continue;
+    if (k === "portale" || k === "zabudowa") (multi[k] = multi[k] || []).push(v);
+    else if (k !== "gdzie") q.set(k, v);
+  }
+  Object.entries(multi).forEach(([k, v]) => q.set(k, v.join(",")));
+  const where = $("gdzie").value.trim();
+  if (where) q.set(/^https?:\/\//i.test(where) ? "link" : "ulica", where);
+  else if (pin) { const ll = pin.getLatLng(); q.set("lat", ll.lat.toFixed(6)); q.set("lon", ll.lng.toFixed(6)); }
+  return q;
+}
+
+function clearSearch() {
+  searchLayers.forEach(l => { map.removeLayer(l); control.removeLayer(l); });
+  searchLayers = []; searchMarkers = [];
+}
+
+function offerPopup(o) {
+  const extra = [o.pokoje ? o.pokoje + " pok." : "", o.pietro != null ? "piętro " + o.pietro : "", o.zabudowa || "",
+                 MARKET[o.rynek] || ""].filter(Boolean).join(", ");
+  return `<b>${esc(o.tytul || "ogłoszenie")}</b><br>${zl(o.cena)} zł, ${m2(o.powierzchnia_m2)} m², ${zl(o.cena_m2)} zł/m²` +
+    (extra ? `<br>${esc(extra)}` : "") + `<br>${esc(o.portal)}${o.takze_na.length ? ", także " + esc(o.takze_na.join(", ")) : ""};
+    położenie ${esc(o.polozenie)}; widziana ${esc(o.ostatnio)}<br><a href="${esc(o.url)}" target="_blank" rel="noopener">Otwórz ogłoszenie</a>`;
+}
+
+function drawSearch(d) {
+  clearSearch();
+  const ref = d.rcn.find(c => c.etykieta === "Rynek wtórny");
+  const circle = L.circle(d.srodek, {radius: d.promien_m, color: css("--ink-2"), weight: 1, dashArray: "4 4", fill: false,
+                                      interactive: false});
+  const cluster = L.markerClusterGroup({showCoverageOnHover: false, maxClusterRadius: 45, spiderfyOnMaxZoom: true,
+    iconCreateFunction: c => {
+      const n = c.getChildCount(), size = n < 10 ? 30 : n < 100 ? 36 : 42;
+      return L.divIcon({html: String(n), className: "mc", iconSize: [size, size]});
+    }});
+  d.grupy.forEach((g, gi) => {
+    let marker;
+    if (g.liczba > 1) {
+      marker = L.marker(g.punkt, {icon: L.divIcon({className: "grp", html: String(g.liczba), iconSize: null}),
+                                  title: g.nazwa || "kilka ofert w jednym miejscu"});
+      marker.bindPopup(`<b>${esc(g.inwestycja ? "Inwestycja " + g.inwestycja : "Kilka ofert w jednym miejscu")}</b><br>
+        ${g.liczba} ofert, ${m2(g.metraz_od)}–${m2(g.metraz_do)} m², ${zl(g.cena_m2_od)}–${zl(g.cena_m2_do)} zł/m²<br>
+        ${esc(g.portale.join(", "))}; położenie ${esc(g.polozenie)}`);
+    } else {
+      const o = g.oferty[0];
+      marker = L.circleMarker(g.punkt, {radius: 8, weight: 2, color: css("--surface"),
+                                        fillColor: priceColor(o.cena_m2, ref), fillOpacity: .95}).bindPopup(offerPopup(o));
+    }
+    marker._gi = gi;
+    searchMarkers.push(marker);
+    cluster.addLayer(marker);
+  });
+  [circle, cluster].forEach(l => { l.addTo(map); searchLayers.push(l); });
+  control.addOverlay(cluster, "Oferty w okolicy");
+  if (!pin) placePin(L.latLng(d.srodek)); else pin.setLatLng(d.srodek);
+  map.fitBounds(circle.getBounds(), {padding: [24, 24]});
+}
+
+function rangeText(a, b, unit) { return a == null ? "–" : a === b ? `${a} ${unit}` : `${a}–${b} ${unit}`; }
+
+function renderSearch(d) {
+  const area = d.metraz_od || d.metraz_do ? `, metraż ${d.metraz_od || "…"}–${d.metraz_do || "…"} m²` : "";
+  $("s-head").textContent = `Oferty w promieniu ${zl(d.promien_m)} m: ${d.liczba_ofert}`;
+  $("s-sub").textContent = `Po filtrach ${d.liczba_ofert} z ${d.przed_filtrami} ofert w promieniu${area}.` +
+    (d.przyblizone ? " Środek wyszukiwania przybliżony." : "") +
+    (d.limit_osiagniety ? " Osiągnięto limit 1000 ofert: zawęź promień lub metraż." : "");
+  const r = d.rcn.map(c => c.status === "brak_danych" ? `${esc(c.etykieta)}: brak sprzedaży` :
+    `${esc(c.etykieta)}: mediana <b>${zl(c.mediana)} zł/m²</b>, typowo ${zl(c.p25)}–${zl(c.p75)}, próbka ${c.proba}` +
+    (c.status === "za_mala_proba" ? " (za mała)" : "")).join("<br>");
+  $("s-rcn").innerHTML = `<p class="note">Dla porównania, sprzedaże z RCN w tym promieniu i metrażu, ostatnie 24 mies.:<br>${r}</p>`;
+  const fresh = Object.entries(d.zrodla).map(([p, i]) => `${esc(p)} ${i.oferty} ofert, ostatnie wyszukiwanie ${esc(i.ostatnio)}`);
+  $("s-fresh").textContent = fresh.length ? "Zapisane oferty: " + fresh.join("; ") + "." : "Brak zapisanych ofert: uruchom wyszukiwanie OLX lub Otodom na Pi.";
+  if (!d.grupy.length) {
+    $("s-list").innerHTML = `<p class="empty">Żadna zapisana oferta nie spełnia filtrów. Poszerz promień, metraż albo cenę.</p>`;
+    return;
+  }
+  const row = (o, gi, oi) => `<tr data-g="${gi}" data-o="${oi}">
+      <td><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.tytul || "ogłoszenie")}</a>
+        <small>${esc([o.portal + (o.takze_na.length ? " (także " + o.takze_na.join(", ") + ")" : ""),
+                      o.pokoje ? o.pokoje + " pok." : "", o.pietro != null ? "piętro " + o.pietro : "", o.zabudowa,
+                      MARKET[o.rynek], "widziana " + o.ostatnio].filter(Boolean).join(", "))}</small></td>
+      <td class="num">${zl(o.cena_m2)}<small>${m2(o.powierzchnia_m2)} m²</small></td>
+      <td class="num">${zl(o.cena)}</td><td class="num">${o.odleglosc_m} m</td></tr>`;
+  const rows = d.grupy.map((g, gi) => g.liczba === 1 ? row(g.oferty[0], gi, 0) :
+    `<tr data-g="${gi}" class="grp-head" aria-expanded="false" title="Kliknij, żeby rozwinąć lokale">
+        <td><span class="count">${g.liczba}</span><b>${esc(g.inwestycja ? "Inwestycja " + g.inwestycja : "Kilka ofert w jednym miejscu")}</b>
+          <small>${esc(g.portale.join(", "))}; ${rangeText(m2(g.metraz_od), m2(g.metraz_do), "m²")}; rozwiń lokale</small></td>
+        <td class="num">${zl(g.cena_m2_od)}<small>do ${zl(g.cena_m2_do)}</small></td>
+        <td class="num">${zl(g.cena_od)}<small>do ${zl(g.cena_do)}</small></td><td class="num">${g.odleglosc_m} m</td></tr>` +
+    g.oferty.map((o, oi) => row(o, gi, oi).replace("<tr ", `<tr class="grp-unit" data-parent="${gi}" hidden `)).join("")).join("");
+  $("s-list").innerHTML = `<table><thead><tr><th>Oferta</th><th class="num">zł/m²</th><th class="num">Cena, zł</th>
+    <th class="num">Odl.</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note">Inwestycje deweloperów i budynki z kilkoma ofertami są zgrupowane w jeden wiersz i jeden znacznik z liczbą ofert.</p>`;
+}
+
+$("s-list").addEventListener("click", ev => {
+  if (ev.target.closest("a")) return;
+  const tr = ev.target.closest("tr[data-g]");
+  if (!tr) return;
+  if (tr.classList.contains("grp-head")) {
+    const open = tr.getAttribute("aria-expanded") !== "true";
+    tr.setAttribute("aria-expanded", String(open));
+    document.querySelectorAll(`#s-list tr[data-parent="${tr.dataset.g}"]`).forEach(r => { r.hidden = !open; });
+  }
+  const m = searchMarkers[+tr.dataset.g];
+  if (!m) return;
+  const cluster = searchLayers[1];
+  cluster.zoomToShowLayer(m, () => m.openPopup());
+  if (window.innerWidth < 1024) $("map").scrollIntoView();
+});
+
+async function runSearch(params) {
+  const st = $("status"), go = $("go-s");
+  st.className = ""; st.textContent = "Szukam w zapisanych ofertach…";
+  go.disabled = true; go.textContent = "Szukam…"; $("panel").setAttribute("aria-busy", "true");
+  try {
+    const r = await fetch("/api/szukaj?" + params);
+    const d = await r.json();
+    if (!d.ok) { st.className = "err"; st.textContent = d.blad; return; }
+    st.textContent = `Ofert: ${d.liczba_ofert}, na mapie ${d.grupy.length} punktów (inwestycje i budynki zgrupowane).`;
+    $("s-result").dataset.filled = "1"; $("s-empty").hidden = true; $("s-result").hidden = false;
+    renderSearch(d); drawSearch(d);
+    history.replaceState(null, "", "?tryb=szukaj&" + params);
+  } catch (e) {
+    st.className = "err"; st.textContent = "Brak połączenia z serwerem na Raspberry Pi. Sprawdź, czy rcn/mapa.py działa.";
+  } finally {
+    go.disabled = false; go.textContent = "Szukaj ofert"; $("panel").removeAttribute("aria-busy");
+  }
+}
+$("fs").addEventListener("submit", ev => { ev.preventDefault(); runSearch(searchParams(ev.target).toString()); });
+
+// A shared address fills the form and runs straight away: ?link=… or ?ulica=… (card), ?tryb=szukaj&… (search).
 (() => {
   const q = new URLSearchParams(location.search);
+  if (q.get("tryb") === "szukaj") {
+    setMode("szukaj");
+    const fs = $("fs").elements;
+    for (const [k, v] of q) {
+      if (k === "portale" || k === "zabudowa") v.split(",").forEach(x => {
+        const box = [...document.querySelectorAll(`#fs input[name="${k}"]`)].find(b => b.value === x); if (box) box.checked = true; });
+      else if (k === "link" || k === "ulica") $("gdzie").value = v;
+      else if (fs[k] && fs[k].type === "checkbox") fs[k].checked = v === "1";
+      else if (fs[k]) fs[k].value = v;
+    }
+    if (q.get("lat") && q.get("lon")) placePin(L.latLng(+q.get("lat"), +q.get("lon")));
+    q.delete("tryb");
+    runSearch(q.toString());
+    return;
+  }
   if (!q.get("link") && !q.get("ulica")) return;
   for (const [k, v] of q) { const el = $("f").elements[k]; if (el) el.value = v; }
   if (q.get("ulica")) toggleManual(true);
