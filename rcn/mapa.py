@@ -417,7 +417,8 @@ def main(argv=None) -> int:
         print("Bez tokenu Mapbox: kafelki OpenStreetMap, trasy wyłączone (MAPBOX_ACCESS_TOKEN albo plik %s)."
               % TOKEN_FILE, flush=True)
     else:
-        print("Mapbox: jasny podkład i trasy włączone.", flush=True)
+        print("Mapbox: podkład i trasy włączone (gdy Mapbox odmówi kafelków, strona przełączy się na OpenStreetMap).",
+              flush=True)
     ctx = Context(args.rcn_db, args.osm_db, args.oferty_db, mapbox_token=token)
     if not os.path.exists(args.osm_db):
         print("UWAGA: nie ma bazy OSM %s, mapa bez otoczenia." % args.osm_db)

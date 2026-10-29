@@ -171,6 +171,12 @@
     :root:not([data-theme="light"]) .osm-tiles { filter: brightness(.72) saturate(.75); }
   }
   :root[data-theme="dark"] .osm-tiles { filter: brightness(.72) saturate(.75); }
+  /* Muted base: greys out the base map so data colours (prices, nuisances, routes) carry the meaning. */
+  .osm-muted { filter: grayscale(.9) contrast(.9) brightness(1.04); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .osm-muted { filter: grayscale(.9) brightness(.62) contrast(1.05); }
+  }
+  :root[data-theme="dark"] .osm-muted { filter: grayscale(.9) brightness(.62) contrast(1.05); }
   .route-btn { margin-top: 8px; min-height: 36px; padding: 0 12px; font-size: 13px; }
   .route-label { font: 600 12.5px/1.3 system-ui, sans-serif; color: var(--ink); background: var(--surface);
                  border: 1px solid var(--line-2); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
@@ -473,21 +479,44 @@ const map = L.map("map", {zoomControl: true}).setView([50.2299, 18.9906], 13);
 // A quiet base lets the data colours stand out; OpenStreetMap stays one click away in the layer menu.
 const TOKEN = typeof window.MAPBOX_TOKEN === "string" && /^pk\./.test(window.MAPBOX_TOKEN) ? window.MAPBOX_TOKEN : null;
 const SOURCES = "ceny: RCN, GUGiK";
-const osmTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, className: "osm-tiles", attribution: "&copy; autorzy OpenStreetMap (ODbL) | " + SOURCES});
-const bases = {"OpenStreetMap": osmTiles};
+// Default base: Mapbox (light, dark in dark mode) when the Pi has a public token. If Mapbox stops serving tiles
+// (demo access caps about 20 000 tiles a month, then every Mapbox service stops until the next month; or a bad
+// token), the page falls back to a muted OpenStreetMap by itself and says so. A base chosen in the layer menu is
+// remembered; the automatic fallback is not, so the next visit tries Mapbox again.
+const osmAttr = "&copy; autorzy OpenStreetMap (ODbL) | " + SOURCES;
+const osmUrl = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const bases = {
+  "OpenStreetMap, stonowana": L.tileLayer(osmUrl, {maxZoom: 19, className: "osm-tiles osm-muted", attribution: osmAttr}),
+  "OpenStreetMap, kolorowa": L.tileLayer(osmUrl, {maxZoom: 19, className: "osm-tiles", attribution: osmAttr}),
+};
+const FALLBACK = "OpenStreetMap, stonowana";
+let baseName = FALLBACK, mapboxBase = null;
 if (TOKEN) {
   const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
   const style = dark ? "dark-v11" : "light-v11";
-  const mb = L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/512/{z}/{x}/{y}@2x?access_token=${TOKEN}`, {
+  mapboxBase = bases["Mapbox"] = L.tileLayer(
+    `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/512/{z}/{x}/{y}@2x?access_token=${TOKEN}`, {
     maxZoom: 20, tileSize: 512, zoomOffset: -1,
     attribution: '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">' +
       'autorzy OpenStreetMap</a> <a href="https://www.mapbox.com/map-feedback/" target="_blank" rel="noopener">Popraw tę mapę</a> | ' + SOURCES});
-  bases["Mapbox, stonowana"] = mb;
-  mb.addTo(map);
-} else {
-  osmTiles.addTo(map);
+  baseName = "Mapbox";
+  let loaded = 0, failed = 0;
+  mapboxBase.on("tileload", () => { loaded++; });
+  mapboxBase.on("tileerror", () => {
+    failed++;
+    if (failed >= 3 && loaded === 0 && map.hasLayer(mapboxBase)) {
+      map.removeLayer(mapboxBase);
+      bases[FALLBACK].addTo(map);
+      const st = $("status");
+      st.className = "err";
+      st.textContent = "Mapbox nie wydaje kafelków (wyczerpany limit konta albo token): przełączono na OpenStreetMap." +
+        " Trasy mogą też nie działać do odnowienia limitu.";
+    }
+  });
 }
+try { const saved = localStorage.getItem("mieszkanie100.podklad"); if (saved && bases[saved]) baseName = saved; } catch (e) { /* no storage */ }
+bases[baseName].addTo(map);
+map.on("baselayerchange", ev => { try { localStorage.setItem("mieszkanie100.podklad", ev.name); } catch (e) { /* no storage */ } });
 const control = L.control.layers(bases, null, {collapsed: true}).addTo(map);
 
 // ---- Routes: from the offer (card) or the pin (search) to a clicked place; on foot up to 3 km, else by car ----
@@ -503,7 +532,8 @@ async function directions(profile, a, b) {
   const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${a.lng.toFixed(6)},${a.lat.toFixed(6)};` +
     `${b.lng.toFixed(6)},${b.lat.toFixed(6)}?geometries=geojson&overview=full&alternatives=false&access_token=${TOKEN}`;
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}` + (r.status === 401 || r.status === 403 ? " (sprawdź token i ograniczenie adresu w Mapbox)" : ""));
+  if (!r.ok) throw new Error(`HTTP ${r.status}` + (r.status === 401 || r.status === 403 ? " (sprawdź token i ograniczenie adresu w Mapbox)"
+    : r.status === 429 ? " (wyczerpany limit Mapbox; odnowi się w nowym miesiącu)" : ""));
   const d = await r.json();
   if (!d.routes || !d.routes.length) throw new Error(d.message || "brak trasy");
   return d.routes[0];
