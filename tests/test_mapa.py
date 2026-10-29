@@ -216,6 +216,16 @@ class MapboxTokenTests(unittest.TestCase):
             self.assertNotIn("sk.secret", page)
             self.assertNotIn("alert(1)", page)
 
+    def test_token_file_accepts_bare_token_or_export_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "env")
+            for text in ("pk.abc.def\n", "export MAPBOX_ACCESS_TOKEN=pk.abc.def\n", 'MAPBOX_ACCESS_TOKEN="pk.abc.def"',
+                         "# komentarz\nexport MAPBOX_ACCESS_TOKEN='pk.abc.def'\n"):
+                with open(path, "w") as f:
+                    f.write(text)
+                self.assertEqual(mapa.token_from_file(path), "pk.abc.def", text)
+            self.assertIsNone(mapa.token_from_file(os.path.join(d, "brak")))
+
     def test_public_token_check(self):
         self.assertEqual(mapa.public_token("pk.eyJ1Ijoi.x-Y_z"), "pk.eyJ1Ijoi.x-Y_z")
         self.assertIsNone(mapa.public_token("sk.eyJ1Ijoi"))

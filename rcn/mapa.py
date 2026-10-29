@@ -56,6 +56,28 @@ def public_token(token: Optional[str]) -> Optional[str]:
     return token if _PUBLIC_TOKEN.match(token) else None
 
 
+TOKEN_FILE = os.path.expanduser("~/.mieszkanie100.env")
+
+
+def token_from_file(path: str = TOKEN_FILE) -> Optional[str]:
+    """The Mapbox token from the Pi's env file: a bare token or a (export) MAPBOX_ACCESS_TOKEN=... line."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if line.startswith("MAPBOX_ACCESS_TOKEN="):
+            line = line[len("MAPBOX_ACCESS_TOKEN="):]
+        return line.strip().strip("'\"") or None
+    return None
+
+
 def render_page(token: Optional[str]) -> str:
     """The page with the Mapbox public token (or null: OpenStreetMap tiles, no routes)."""
     value = json.dumps(token) if token and _PUBLIC_TOKEN.match(token) else "null"
@@ -386,13 +408,14 @@ def main(argv=None) -> int:
         print("BŁĄD: nie ma bazy RCN %s" % args.rcn_db, file=sys.stderr)
         return 2
     print("Wczytuję wiek budynków z RCN...", flush=True)
-    raw_token = os.environ.get("MAPBOX_ACCESS_TOKEN")
+    raw_token = os.environ.get("MAPBOX_ACCESS_TOKEN") or token_from_file()   # never printed
     token = public_token(raw_token)
     if raw_token and token is None:
         print("UWAGA: MAPBOX_ACCESS_TOKEN nie jest tokenem publicznym (pk.); nie trafi do przeglądarki."
               " Mapa użyje kafelków OpenStreetMap, trasy wyłączone.", flush=True)
     elif token is None:
-        print("Bez tokenu Mapbox: kafelki OpenStreetMap, trasy wyłączone (MAPBOX_ACCESS_TOKEN).", flush=True)
+        print("Bez tokenu Mapbox: kafelki OpenStreetMap, trasy wyłączone (MAPBOX_ACCESS_TOKEN albo plik %s)."
+              % TOKEN_FILE, flush=True)
     else:
         print("Mapbox: jasny podkład i trasy włączone.", flush=True)
     ctx = Context(args.rcn_db, args.osm_db, args.oferty_db, mapbox_token=token)
