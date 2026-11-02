@@ -89,3 +89,59 @@ class CacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+MPZP_PLAIN = ("@MPZP TerenyID;Shape;PLAN_ID;OPIS;WR_SYMBOL;OZNACZENIE_TERENU;MAX_WYSOKOSC_BUDYNKU;POW_BIOLOGICZNIE_CZYNNA\r\n"
+              "77;Polygon;1234;Tereny zabudowy mieszkaniowej wielorodzinnej;MW;12MW;25;30\r\n")
+
+
+class ZoningTests(unittest.TestCase):
+    def test_plan_from_text_plain(self):
+        fetch = FakeFetch({"GetFeatureInfo": (200, MPZP_PLAIN)})
+        terms = grunt.zoning(POINT, fetch=fetch)
+        self.assertEqual(len(terms), 1)
+        t = terms[0]
+        self.assertEqual((t["warstwa"], t["symbol"], t["przeznaczenie"]), ("MPZP Tereny", "12MW",
+                         "zabudowa mieszkaniowa wielorodzinna"))
+        self.assertEqual(t["pola"]["MAX_WYSOKOSC_BUDYNKU"], "25")
+        self.assertNotIn("Shape", t["pola"])
+        url = fetch.urls[0]
+        self.assertIn("CRS=EPSG%3A2180", url)
+        self.assertIn("BBOX=262670.44%2C497745.80%2C262770.44%2C497845.80", url)     # northing first in WMS 1.3.0
+
+    def test_header_on_its_own_line_and_no_plan(self):
+        text = "@MPZP Tereny\nID;WR_SYMBOL;OPIS\n5;U;usługi\n"
+        self.assertEqual(grunt.zoning(POINT, fetch=FakeFetch({"GetFeatureInfo": (200, text)}))[0]["przeznaczenie"],
+                         "zabudowa usługowa")
+        self.assertEqual(grunt.zoning(POINT, fetch=FakeFetch({"GetFeatureInfo": (200, "m. Katowice: brak wyniku dla wskazanego obszaru")})), [])
+
+    def test_symbol_meanings(self):
+        self.assertEqual(grunt.symbol_meaning("3MN"), "zabudowa mieszkaniowa jednorodzinna")
+        self.assertEqual(grunt.symbol_meaning("KDL"), "droga publiczna")
+        self.assertEqual(grunt.symbol_meaning("1ZP"), "zieleń urządzona")
+        self.assertEqual(grunt.symbol_meaning("MW/U"), "zabudowa mieszkaniowa wielorodzinna / zabudowa usługowa")
+        self.assertIsNone(grunt.symbol_meaning("XYZ"))
+
+
+class GeohazardTests(unittest.TestCase):
+    def test_identify_collects_layer_names(self):
+        answer = json.dumps({"results": [{"layerName": "GDT - obszary udokumentowanej płytkiej eksploatacji złóż węgla kamiennego do 100 m p.p.t.",
+                                          "attributes": {"OBJECTID": 1, "OPIS": "eksploatacja płytka"}}]})
+        fetch = FakeFetch({"gdt/MapServer/identify": (200, answer), "sopo_obszary/MapServer/identify": (200, '{"results": []}')})
+        hazards = grunt.geohazards(POINT, fetch=fetch)
+        self.assertEqual(hazards["gdt"][0]["warstwa"][:40], "GDT - obszary udokumentowanej płytkiej e")
+        self.assertEqual(hazards["sopo"], [])
+        self.assertTrue(all("sr=2180" in u and "geometry=497795.80%2C262720.44" in u for u in fetch.urls))
+
+
+class MiningSummaryTests(unittest.TestCase):
+    def test_known_midas_fields(self):
+        s = grunt.mining_summary({"NAZWA_OG": "Stara Ligota I ", "KOPALINA": "METAN POKŁADÓW WĘGLI (MPW), WĘGLE KAMIENNE",
+                                  "STATUS": "aktualny", "DATA_WAZNOSCI": "29/05/2035", "NADZOR_OUG": "Okręgowy Urząd Górniczy - Katowice"})
+        self.assertEqual(s, "Stara Ligota I: metan pokładów węgli (mpw), węgle kamienne; aktualny, ważny do 29/05/2035;"
+                            " nadzór: Okręgowy Urząd Górniczy - Katowice")
+
+    def test_parcel_names_cleaned(self):
+        fetch = FakeFetch({"GetParcelByXY": (200, "0\nA|śląskie|powiat Katowice|Katowice (miasto)|Dz. Ligota|14/15\n")})
+        p = grunt.parcel(POINT, fetch=fetch)
+        self.assertEqual((p["powiat"], p["gmina"], p["obreb"]), ("Katowice", "Katowice", "Ligota"))

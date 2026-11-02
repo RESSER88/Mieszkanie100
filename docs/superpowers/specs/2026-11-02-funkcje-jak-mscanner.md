@@ -40,3 +40,15 @@ Punkt testowy: ul. Szurmana, EPSG:2180 (northing 262720.44, easting 497795.80), 
 - OSM: sklepy spożywcze, apteki, przychodnie i lekarze, szpitale, place zabaw („Na co dzień”), parki i lasy (nowa grupa „Zieleń”), udział zieleni w promieniu 500 m (siatka punktów co 25 m). Filtr `osmium` w `scripts/osm_odswiez.sh` rozszerzony.
 - Panel karty: części „Grunt i formalności” i „Koszty zakupu”, zieleń w „Otoczenie”.
 - Sondy dla 2 (MPZP o punkt), 4 (ISOK), 5 (PIG geozagrożenia), 6 (hałas), 9 (GIOŚ) i pól MIDAS: `bash scripts/sondy_listopad.sh`.
+
+## Wynik sondy z Pi i wdrożenie (2026-11-02, druga część)
+
+- MIDAS: pola `NAZWA_OG`/`NAZWA_TG`, `KOPALINA`, `STATUS`, `DATA_WAZNOSCI`, `NADZOR_OUG` i inne. Szurmana leży w obszarze górniczym „Stara Ligota I” (metan pokładów węgli, węgle kamienne; aktualny, ważny do 29.05.2035; nadzór OUG Katowice). Karta pokazuje to jednym zdaniem.
+- ULDK: `powiat Katowice`, `Katowice (miasto)`, `Dz. Ligota`; nazwy są oczyszczane do „Katowice”, „Ligota”.
+- MPZP: GetFeatureInfo działa w `text/plain` (format Esri: `@warstwa`, wiersz nagłówków, wiersze wartości rozdzielone `;`) i `text/html`; w `application/vnd.ogc.gml` zwraca „brak wyniku”. Karta pokazuje oznaczenie terenu, przeznaczenie (słownik symboli z rozporządzenia o projekcie MPZP), maksymalną wysokość, intensywność i powierzchnię biologicznie czynną.
+- PIG geozagrożenia: usługi `gdt` (zapadliska, obszary reaktywacji zapadlisk, płytka eksploatacja węgla do 100 m, deformacje nieciągłe), `sopo_obszary`, `sopo_stan`, `antropopresja`, `inmotep` (ruchy terenu EGMS). Karta pyta `gdt` i `sopo_obszary` (identify w punkcie).
+- GIOŚ: `station/findAll` z kluczami polskimi (`WGS84 φ N`, `WGS84 λ E`); najbliższa stacja dla Szurmana: Katowice, ul. Kossutha, 3,7 km. Karta pokazuje stację, odległość i bieżący indeks (`aqindex/getIndex/{id}`).
+- Warstwy na mapie (menu warstw): działki KIEG, plan miejscowy, formy ochrony przyrody GDOŚ, podkład ortofotomapy GUGiK (HighResolution, warstwa `Raster`; adres StandardResolution zwrócił 404). Czy usługi przyjmują EPSG:3857: druga sonda.
+- Hałas: GDDKiA publikuje usługi `mapaImisyjnaLDWN`, `mapaImisyjnaLN`, `mapaTerenyZagrozoneHalasemLDWN` i inne pod `mapy.geoportal.gov.pl/wss/service/gddkia/` (drogi krajowe); Katowice mają własną mapę `halas.katowice.eu`. Do wdrożenia po drugiej sondzie.
+- Powódź ISOK: strona `wody.isok.gov.pl/imap_kzgw` to aplikacja w JavaScript bez adresów usług w kodzie strony; druga sonda sprawdza kandydatów.
+- Druga sonda: `bash scripts/sondy_listopad2.sh`.

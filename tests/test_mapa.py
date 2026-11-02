@@ -120,6 +120,7 @@ class CardJsonTests(unittest.TestCase):
         status, body = mapa.card_json(ctx, {"ulica": "Szurmana", "cena": "839000", "metraz": "65"})
         self.assertEqual(body["grunt"]["dzialka"]["obreb"], "Ligota")
         self.assertEqual(body["grunt"]["gornictwo"], {"obszary_gornicze": [], "tereny_gornicze": []})
+        self.assertIn("powietrze", body)
 
     def test_costs_endpoint(self):
         status, body = mapa.costs_json({"cena": "800000", "metraz": "80", "rynek": "pierwotny", "wykonczenie_m2": "2000"})

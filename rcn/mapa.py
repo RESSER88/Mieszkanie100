@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rcn import filtry, grunt, karta, koszty, okolica, otoczenie, podobne, wiek  # noqa: E402
+from rcn import filtry, grunt, karta, koszty, okolica, otoczenie, podobne, powietrze, wiek  # noqa: E402
 
 PORTALS = ("otodom.pl", "olx.pl", "gratka.pl", "nieruchomosci-online.pl", "morizon.pl", "domiporta.pl",
            "adresowo.pl", "rynekpierwotny.pl")
@@ -259,6 +259,7 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
                   if ctx.land_fetch else None),
         "koszty": koszty.costs(o["cena"], o.get("powierzchnia_m2"), o.get("rynek") or "wtorny")
                   if o.get("cena") else None,
+        "powietrze": _air(ctx, card["srodek"]),
         "podobne": similar,
         "srodek": _latlon(*card["srodek"]),
         "przyblizone": not card["polozenie_dokladne"],
@@ -382,6 +383,17 @@ def _store_freshness(path: str) -> Dict[str, Dict[str, Any]]:
                 con.execute("SELECT portal, COUNT(*), MAX(ostatnio) FROM oferty GROUP BY portal")}
     finally:
         con.close()
+
+
+def _air(ctx: Context, center) -> Optional[Dict[str, Any]]:
+    """Nearest GIOŚ station and its index; None without network (tests) or when GIOŚ does not answer."""
+    if not ctx.land_fetch:
+        return None
+    lat, lon = otoczenie.pl1992_to_wgs84(*center)
+    try:
+        return powietrze.air_quality(lat, lon, ctx.sources_db, fetch=ctx.land_fetch, today=ctx.today)
+    except (grunt.SourceError, ValueError) as exc:
+        return {"stacja": None, "uwaga": str(exc)}
 
 
 def costs_json(params: Dict[str, str]) -> Tuple[int, Dict[str, Any]]:

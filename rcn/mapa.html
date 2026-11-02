@@ -430,7 +430,10 @@
       <section id="s-oferta"><h2>Oferta</h2><dl class="facts" id="facts"></dl></section>
       <section id="s-budynek"><h2>Budynek</h2><dl class="facts" id="building"></dl></section>
       <section id="s-grunt"><h2>Grunt i formalności</h2><dl class="facts" id="land"></dl>
-        <p class="note">Działka: ULDK (GUGiK). Obszary i tereny górnicze: MIDAS (PIG-PIB). Odpowiedzi zapamiętane na 30 dni.</p></section>
+        <p class="note">Działka: ULDK (GUGiK). Plan miejscowy: krajowa integracja MPZP (GUGiK). Obszary i tereny górnicze: MIDAS,
+          geozagrożenia: PIG-PIB. Odpowiedzi zapamiętane na 30 dni.</p></section>
+      <section id="s-powietrze"><h2>Powietrze</h2><dl class="facts" id="air"></dl>
+        <p class="note">Najbliższa stacja pomiarowa GIOŚ; może być kilka kilometrów od mieszkania.</p></section>
       <section id="s-podobne"><h2 id="similar-h">Podobne oferty w okolicy</h2><div id="similar"></div></section>
       <section id="s-otoczenie"><h2 id="around-h">Otoczenie</h2><div id="around"></div></section>
       <section id="s-koszty"><h2>Koszty zakupu</h2>
@@ -554,7 +557,21 @@ if (TOKEN) {
 try { const saved = localStorage.getItem("mieszkanie100.podklad"); if (saved && bases[saved]) baseName = saved; } catch (e) { /* no storage */ }
 bases[baseName].addTo(map);
 map.on("baselayerchange", ev => { try { localStorage.setItem("mieszkanie100.podklad", ev.name); } catch (e) { /* no storage */ } });
+bases["Ortofotomapa (GUGiK)"] = L.tileLayer.wms("https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution", {
+  layers: "Raster", format: "image/jpeg", maxZoom: 20, attribution: "Ortofotomapa: GUGiK | " + SOURCES});
 const control = L.control.layers(bases, null, {collapsed: true}).addTo(map);
+// Official layers to switch on in the layer menu; each one is a picture from the service (no data leaves the Pi).
+const WMS_OVERLAYS = [
+  ["Działki (KIEG, GUGiK)", "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow",
+   {layers: "dzialki,numery_dzialek", minZoom: 15, opacity: .9}],
+  ["Plan miejscowy (MPZP, GUGiK)", "https://mapy.geoportal.gov.pl/wss/ext/KrajowaIntegracjaMiejscowychPlanowZagospodarowaniaPrzestrzennego",
+   {layers: "raster,wektor-pow,wektor-lin,plany_granice", minZoom: 13, opacity: .6}],
+  ["Ochrona przyrody (GDOŚ)", "https://sdi.gdos.gov.pl/wms",
+   {layers: "GDOS:ObszaryChronionegoKrajobrazu,GDOS:ObszarySpecjalnejOchrony,GDOS:ParkiKrajobrazowe,GDOS:Rezerwaty,GDOS:PomnikiPrzyrody",
+    opacity: .5}],
+];
+WMS_OVERLAYS.forEach(([name, url, opts]) => control.addOverlay(
+  L.tileLayer.wms(url, Object.assign({format: "image/png", transparent: true, version: "1.1.1", maxZoom: 20}, opts)), name));
 
 // ---- Routes: from the offer (card) or the pin (search) to a clicked place; on foot up to 3 km, else by car ----
 const WALK_LIMIT_M = 3000;
@@ -860,12 +877,35 @@ function renderLand(d) {
     : `<span class="missing">${g.bledy.some(e => e.startsWith("ULDK")) ? "brak odpowiedzi ULDK" : "brak działki w punkcie"}</span>`;
   const show = list => list.map(a => esc(Object.entries(a).filter(([k]) => /nazw|kopalin|status|rodzaj/i.test(k))
     .map(([, v]) => v).join(", ") || Object.values(a).slice(0, 2).join(", "))).join("; ");
-  const m = g.gornictwo;
+  const m = g.gornictwo, mo = g.gornictwo_opis || {};
   const mining = !m ? `<span class="missing">brak odpowiedzi MIDAS</span>`
-    : [m.obszary_gornicze.length ? `obszar górniczy: <b>tak</b> (${show(m.obszary_gornicze)})` : "obszar górniczy: nie",
-       m.tereny_gornicze.length ? `teren górniczy: <b>tak</b> (${show(m.tereny_gornicze)})` : "teren górniczy: nie"].join("<br>");
-  $("land").innerHTML = fact("Działka", parcel) + fact("Górnictwo", mining) +
+    : [m.obszary_gornicze.length ? `obszar górniczy: <b>tak</b>, ${esc((mo.obszary_gornicze || []).join("; ") || show(m.obszary_gornicze))}`
+                                 : "obszar górniczy: nie",
+       m.tereny_gornicze.length ? `teren górniczy: <b>tak</b>, ${esc((mo.tereny_gornicze || []).join("; ") || show(m.tereny_gornicze))}`
+                                : "teren górniczy: nie"].join("<br>");
+  const plan = g.plan == null ? `<span class="missing">brak odpowiedzi usługi MPZP</span>`
+    : !g.plan.length ? "brak planu miejscowego w tym punkcie (krajowa integracja MPZP)"
+    : g.plan.map(t => {
+        const f = t.pola || {};
+        const extra = [f.MAX_WYSOKOSC_BUDYNKU ? `wysokość do ${esc(f.MAX_WYSOKOSC_BUDYNKU)} m` : "",
+                       f.MAX_INTENSYWNOSC_ZABUDOWY ? `intensywność do ${esc(f.MAX_INTENSYWNOSC_ZABUDOWY)}` : "",
+                       f.POW_BIOLOGICZNIE_CZYNNA ? `biologicznie czynna min. ${esc(f.POW_BIOLOGICZNIE_CZYNNA)}%` : ""].filter(Boolean);
+        return `<b>${esc(t.symbol || "teren")}</b>${t.przeznaczenie ? ": " + esc(t.przeznaczenie) : ""}` +
+               (extra.length ? `<small class="missing">${extra.join(", ")}</small>` : "");
+      }).join("<br>");
+  const gz = g.geozagrozenia;
+  const hazards = !gz ? `<span class="missing">brak odpowiedzi PIG</span>`
+    : [...(gz.gdt || []), ...(gz.sopo || [])].map(h => esc((h.warstwa || "").replace(/^GDT\s*[-–]\s*/, ""))).join("<br>") ||
+      "brak zapadlisk, płytkiej eksploatacji i osuwisk w danych PIG";
+  $("land").innerHTML = fact("Działka", parcel) + fact("Plan miejscowy", plan) + fact("Górnictwo", mining) +
+    fact("Geozagrożenia", hazards) +
     (d.przyblizone ? fact("Uwaga", `<span class="missing">położenie oferty przybliżone, działka może być sąsiednia</span>`) : "");
+  const a = d.powietrze;
+  $("air").innerHTML = !a ? fact("Stan", `<span class="missing">sprawdzanie wyłączone</span>`)
+    : !a.stacja ? fact("Stan", `<span class="missing">${esc(a.uwaga || "brak odpowiedzi GIOŚ")}</span>`)
+    : fact("Stacja GIOŚ", `${esc(a.stacja)} <small class="missing">${String(a.odleglosc_km).replace(".", ",")} km od punktu</small>`) +
+      fact("Indeks teraz", a.indeks ? `<b>${esc(a.indeks)}</b> <small class="missing">${esc(a.czas || "")}</small>`
+                                    : `<span class="missing">${esc(a.uwaga || "brak indeksu")}</span>`);
 }
 
 let costTimer = null, costBase = null;
