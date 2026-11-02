@@ -93,4 +93,22 @@ for dist, r in best[:3]:
     print("   %.1f km" % dist, json.dumps(r, ensure_ascii=False)[:220])
 PY
 
+echo "### Działki na mapie (KIEG, GUGiK): warstwy WMS"
+get kieg_caps.xml "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow?SERVICE=WMS&REQUEST=GetCapabilities"
+names kieg_caps.xml 20
+
+echo "### Ortofotomapy (GUGiK): bieżąca i archiwalna"
+get orto_caps.xml "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution?SERVICE=WMS&REQUEST=GetCapabilities"
+names orto_caps.xml 12
+get orto_arch_caps.xml "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution?SERVICE=WMS&REQUEST=GetCapabilities"
+names orto_arch_caps.xml 12
+
+echo "### Formy ochrony przyrody (GDOŚ): warstwy WMS"
+get gdos_caps.xml "https://sdi.gdos.gov.pl/wms?SERVICE=WMS&REQUEST=GetCapabilities"
+names gdos_caps.xml 25
+
+echo "### Hałas Katowice: mapa akustyczna (szukam usług na stronach miasta)"
+get katowice_halas.html "https://www.katowice.eu/dla-mieszka%C5%84ca/ochrona-%C5%9Brodowiska/mapa-akustyczna"
+grep -oiE "https?://[^\"' <>]*(wms|wfs|arcgis|MapServer|geoportal|msip|halas|akustycz)[^\"' <>]*" "$OUT/katowice_halas.html" | sort -u | head -12 | sed 's/^/   /'
+
 echo "### Gotowe. Proszę wkleić cały wynik. Pliki w $OUT/."
