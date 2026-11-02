@@ -15,9 +15,11 @@ if [ "${1:-}" = "--pobierz" ] || [ ! -f "$PBF" ]; then
   mv "$PBF.tmp" "$PBF"
 fi
 command -v osmium >/dev/null || { echo "BŁĄD: brak osmium (sudo apt install osmium-tool)"; exit 2; }
-echo "== Filtruję obiekty otoczenia (szkoły, przystanki, linie, kolej, tramwaje, drogi, lotniska, przemysł)"
+echo "== Filtruję obiekty otoczenia (szkoły, sklepy, apteki, przychodnie, parki, lasy, place zabaw, przystanki, linie, kolej, drogi, przemysł)"
 osmium tags-filter "$PBF" \
-  nwr/amenity=school,kindergarten n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform \
+  nwr/amenity=school,kindergarten,pharmacy,clinic,doctors,hospital nwr/shop=supermarket,convenience \
+  nwr/leisure=park,playground nwr/landuse=forest nwr/natural=wood \
+  n/highway=bus_stop n/railway=tram_stop nwr/public_transport=platform \
   w/highway=construction,proposed,motorway,trunk,primary,motorway_link,trunk_link,primary_link,secondary,secondary_link \
   w/railway=rail,tram nwr/aeroway=aerodrome nwr/power=line,substation nwr/man_made=mast,tower,wastewater_plant \
   nwr/landuse=industrial,landfill,quarry -o "$DIR/otoczenie-slask.osm.pbf" --overwrite

@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rcn import filtry, karta, okolica, otoczenie, podobne, wiek  # noqa: E402
+from rcn import filtry, grunt, karta, koszty, okolica, otoczenie, podobne, wiek  # noqa: E402
 
 PORTALS = ("otodom.pl", "olx.pl", "gratka.pl", "nieruchomosci-online.pl", "morizon.pl", "domiporta.pl",
            "adresowo.pl", "rynekpierwotny.pl")
@@ -35,6 +35,7 @@ FULL_RADIUS_CAP = 600          # ways per category, a guard for dense road netwo
 # Power lines are sparse and matter from afar, so they are looked up further than the rest.
 GRID = ("linia_najwyzsza", "linia_wn")
 GRID_RADIUS_M = 10000.0
+GREEN_RADIUS_M = 500.0         # share of parks and forests around the point
 OSM_RADIUS_M = 3000.0          # surroundings around a search pin (the card uses its own, also 3 km)
 SIMPLIFY_M = 3.0               # shapes are simplified to this tolerance before sending to the phone
 MARKET_TEXT = {"rynekWtorny": "wtórny", "rynekPierwotny": "pierwotny"}
@@ -43,6 +44,8 @@ GROUPS = {"linia_wn": "uciazliwosci", "linia_inna": "uciazliwosci", "stacja_ener
           "maszt": "uciazliwosci", "kolej": "uciazliwosci", "droga_glowna": "uciazliwosci", "przemysl": "uciazliwosci",
           "linia_najwyzsza": "uciazliwosci", "tramwaj": "uciazliwosci", "lotnisko": "uciazliwosci",
           "droga_drugorzedna": "uciazliwosci",
+          "sklep": "na_co_dzien", "apteka": "na_co_dzien", "przychodnia": "na_co_dzien", "szpital": "na_co_dzien",
+          "plac_zabaw": "na_co_dzien", "park": "zielen", "las": "zielen",
           "skladowisko": "uciazliwosci", "oczyszczalnia": "uciazliwosci", "kamieniolom": "uciazliwosci",
           "droga_w_budowie": "drogi", "droga_planowana": "drogi",
           "przedszkole": "na_co_dzien", "szkola": "na_co_dzien", "przystanek": "na_co_dzien"}
@@ -89,8 +92,10 @@ class Context:
     """Paths and the building-age index, built once at start (the RCN base changes only on import)."""
 
     def __init__(self, rcn_db: str, osm_db: str, oferty_db: str, today: Optional[date] = None,
-                 mapbox_token: Optional[str] = None):
+                 mapbox_token: Optional[str] = None, land_fetch=None, sources_db: str = "bufor_zrodel.sqlite"):
         self.rcn_db, self.osm_db, self.oferty_db = rcn_db, osm_db, oferty_db
+        # Point queries to GUGiK ULDK and PIG MIDAS; None (tests) leaves the card's land section out.
+        self.land_fetch, self.sources_db = land_fetch, sources_db
         self.page = render_page(public_token(mapbox_token))
         self.today = today
         con = sqlite3.connect(rcn_db)
@@ -221,6 +226,7 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
         try:
             card = karta.build_card(offer, rcn, osm, radius, months, today=ctx.today, ages=ctx.ages)
             items = _surroundings(osm, card["srodek"], card["promien_otoczenia_m"])
+            green = otoczenie.green_share(osm, card["srodek"], GREEN_RADIUS_M) if osm is not None else None
         finally:
             rcn.close()
             if osm is not None:
@@ -248,6 +254,11 @@ def card_json(ctx: Context, params: Dict[str, str]) -> Tuple[int, Dict[str, Any]
         "otoczenie_lista": _nearest_by_category(items),
         "promien_otoczenia_m": card["promien_otoczenia_m"],
         "promien_sieci_m": GRID_RADIUS_M,
+        "zielen_proc": green, "promien_zieleni_m": GREEN_RADIUS_M,
+        "grunt": (grunt.report(card["srodek"], ctx.sources_db, fetch=ctx.land_fetch, today=ctx.today)
+                  if ctx.land_fetch else None),
+        "koszty": koszty.costs(o["cena"], o.get("powierzchnia_m2"), o.get("rynek") or "wtorny")
+                  if o.get("cena") else None,
         "podobne": similar,
         "srodek": _latlon(*card["srodek"]),
         "przyblizone": not card["polozenie_dokladne"],
@@ -373,6 +384,20 @@ def _store_freshness(path: str) -> Dict[str, Dict[str, Any]]:
         con.close()
 
 
+def costs_json(params: Dict[str, str]) -> Tuple[int, Dict[str, Any]]:
+    """(HTTP status, JSON body) for /api/koszty: purchase costs under the assumptions typed on the page."""
+    try:
+        price = _float(params, "cena")
+        area = _float(params, "metraz")
+        if not price or price <= 0:
+            raise ValueError("podaj cenę")
+        assumptions = koszty.assumptions_from(params)
+    except ValueError as exc:
+        return 400, {"ok": False, "blad": str(exc)}
+    market = params.get("rynek") if params.get("rynek") in ("wtorny", "pierwotny") else "wtorny"
+    return 200, {"ok": True, **koszty.costs(price, area, market, assumptions)}
+
+
 def make_handler(ctx: Context):
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, body: bytes, kind: str) -> None:
@@ -387,10 +412,13 @@ def make_handler(ctx: Context):
             parts = urllib.parse.urlsplit(self.path)
             if parts.path == "/":
                 self._send(200, ctx.page.encode("utf-8"), "text/html; charset=utf-8")
-            elif parts.path in ("/api/karta", "/api/szukaj"):
+            elif parts.path in ("/api/karta", "/api/szukaj", "/api/koszty"):
                 params = {k: v[-1] for k, v in urllib.parse.parse_qs(parts.query).items()}
                 try:
-                    status, body = (card_json if parts.path == "/api/karta" else search_json)(ctx, params)
+                    if parts.path == "/api/koszty":
+                        status, body = costs_json(params)
+                    else:
+                        status, body = (card_json if parts.path == "/api/karta" else search_json)(ctx, params)
                 except Exception as exc:  # keep the server up; the message goes to the page and the terminal
                     self.log_error("błąd karty: %r", exc)
                     status, body = 500, {"ok": False, "blad": "błąd programu: %s" % exc}
@@ -434,7 +462,8 @@ def main(argv=None) -> int:
     else:
         print("Mapbox: podkład i trasy włączone (gdy Mapbox odmówi kafelków, strona przełączy się na OpenStreetMap).",
               flush=True)
-    ctx = Context(args.rcn_db, args.osm_db, args.oferty_db, mapbox_token=token)
+    ctx = Context(args.rcn_db, args.osm_db, args.oferty_db, mapbox_token=token, land_fetch=grunt.http_get,
+                  sources_db=os.path.join(os.path.dirname(os.path.abspath(args.rcn_db)), "bufor_zrodel.sqlite"))
     if not os.path.exists(args.osm_db):
         print("UWAGA: nie ma bazy OSM %s, mapa bez otoczenia." % args.osm_db)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(ctx))

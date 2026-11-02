@@ -275,5 +275,35 @@ class ImportGuardTests(unittest.TestCase):
             self.assertEqual(oz.import_geojsonseq(seq, db)["zapisane"], 90)
 
 
+class EverydayAndGreenTests(unittest.TestCase):
+    def test_new_kinds(self):
+        cases = {"sklep": {"shop": "supermarket"}, "apteka": {"amenity": "pharmacy"}, "przychodnia": {"amenity": "clinic"},
+                 "szpital": {"amenity": "hospital"}, "plac_zabaw": {"leisure": "playground"},
+                 "park": {"leisure": "park"}, "las": {"landuse": "forest"}}
+        for kind, tags in cases.items():
+            self.assertEqual(oz.classify(tags), kind, tags)
+            self.assertIn(kind, oz.LABELS)
+        self.assertEqual(oz.classify({"amenity": "doctors"}), "przychodnia")
+        self.assertEqual(oz.classify({"natural": "wood"}), "las")
+        self.assertEqual(oz.classify({"shop": "convenience"}), "sklep")
+        self.assertIsNone(oz.classify({"shop": "clothes"}))
+
+    def test_green_share_in_radius(self):
+        with tempfile.TemporaryDirectory() as d:
+            seq, db = os.path.join(d, "o.geojsonseq"), os.path.join(d, "osm.sqlite")
+            # a park square of 500 m x 500 m whose corner sits at the centre: a quarter of the circle is green
+            lat0, lon0 = 50.23, 18.97
+            dlat, dlon = 500 / 111200.0, 500 / 71200.0
+            ring = [[lon0, lat0], [lon0 + dlon, lat0], [lon0 + dlon, lat0 + dlat], [lon0, lat0 + dlat], [lon0, lat0]]
+            with open(seq, "w", encoding="utf-8") as f:
+                f.write("\x1e" + json.dumps({"type": "Feature", "id": "w1", "properties": {"leisure": "park"},
+                                             "geometry": {"type": "Polygon", "coordinates": [ring]}}) + "\n")
+            oz.import_geojsonseq(seq, db)
+            con = oz.connect(db)
+            share = oz.green_share(con, oz.wgs84_to_pl1992(lat0, lon0), 500.0)
+            con.close()
+        self.assertAlmostEqual(share, 25.0, delta=3.0)
+
+
 if __name__ == "__main__":
     unittest.main()

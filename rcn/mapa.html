@@ -19,7 +19,7 @@
     color-scheme: light;
     --ground: #f6f7f5; --surface: #ffffff; --ink: #1c2321; --ink-2: #4d5753; --muted: #66706b;
     --line: #dfe3e0; --line-2: #c9cfcb; --band: #e7eae8;
-    --cheap: #2a78d6; --typical: #8f9692; --dear: #e34948; --daily: #1baf7a; --nuisance: #4d5753;
+    --cheap: #2a78d6; --typical: #8f9692; --dear: #e34948; --daily: #1baf7a; --green: #008300; --nuisance: #4d5753;
     --road: #8a6a00; --focus: #1c2321;
   }
   @media (prefers-color-scheme: dark) {
@@ -27,7 +27,7 @@
       color-scheme: dark;
       --ground: #171b19; --surface: #1d2220; --ink: #e8ece9; --ink-2: #c1c9c4; --muted: #9aa49f;
       --line: #313835; --line-2: #414945; --band: #2a312e;
-      --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --nuisance: #b9c2bd;
+      --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --green: #2e9a2e; --nuisance: #b9c2bd;
       --road: #c98500; --focus: #e8ece9;
     }
   }
@@ -35,7 +35,7 @@
     color-scheme: dark;
     --ground: #171b19; --surface: #1d2220; --ink: #e8ece9; --ink-2: #c1c9c4; --muted: #9aa49f;
     --line: #313835; --line-2: #414945; --band: #2a312e;
-    --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --nuisance: #b9c2bd;
+    --cheap: #3987e5; --typical: #8f9692; --dear: #e66767; --daily: #199e70; --green: #2e9a2e; --nuisance: #b9c2bd;
     --road: #c98500; --focus: #e8ece9;
   }
   * { box-sizing: border-box; }
@@ -128,6 +128,8 @@
   #s-list tbody tr { cursor: pointer; }
   #s-list tbody tr:hover td { background: var(--ground); }
   tr.grp-unit td:first-child { padding-left: 28px; }
+  tr.sum td { border-top: 1px solid var(--line-2); }
+  p.err { color: var(--dear); font-weight: 600; }
   tr.grp-head[aria-expanded="true"] td { background: var(--band); }
   .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
            background: var(--ink); color: var(--ground); font-size: 11.5px; font-weight: 700; margin-right: 6px; }
@@ -427,8 +429,21 @@
       </section>
       <section id="s-oferta"><h2>Oferta</h2><dl class="facts" id="facts"></dl></section>
       <section id="s-budynek"><h2>Budynek</h2><dl class="facts" id="building"></dl></section>
+      <section id="s-grunt"><h2>Grunt i formalności</h2><dl class="facts" id="land"></dl>
+        <p class="note">Działka: ULDK (GUGiK). Obszary i tereny górnicze: MIDAS (PIG-PIB). Odpowiedzi zapamiętane na 30 dni.</p></section>
       <section id="s-podobne"><h2 id="similar-h">Podobne oferty w okolicy</h2><div id="similar"></div></section>
       <section id="s-otoczenie"><h2 id="around-h">Otoczenie</h2><div id="around"></div></section>
+      <section id="s-koszty"><h2>Koszty zakupu</h2>
+        <div class="fgrid" id="cost-form">
+          <label class="f">Wkład własny, %<input name="wklad_proc" inputmode="decimal" value="20"></label>
+          <label class="f">Oprocentowanie, %<input name="oprocentowanie" inputmode="decimal" value="7"></label>
+          <label class="f">Okres kredytu, lata<input name="lata" inputmode="numeric" value="25"></label>
+          <label class="f">Prowizja pośrednika, %<input name="prowizja_proc" inputmode="decimal" value="0"></label>
+          <label class="f">Wykończenie, zł/m²<input name="wykonczenie_m2" inputmode="numeric" value="0"></label>
+          <label class="f">Czynsz, zł/m² miesięcznie<input name="czynsz_m2" inputmode="decimal" value="0"></label>
+        </div>
+        <div id="costs"></div>
+        <p class="note">Szacunek według stawek maksymalnych i opłat sądowych z 2026 r., nie oferta notariusza ani banku.</p></section>
       <section id="s-sprzedaze"><h2>Najbliższe sprzedaże</h2><div id="sales"></div></section>
       <section>
         <details class="raw"><summary>Pełna karta tekstowa</summary><pre id="card"></pre></details>
@@ -446,7 +461,9 @@ const zl = v => v == null ? "–" : Math.round(v).toLocaleString("pl-PL");
 const m2 = v => v == null ? "–" : (+v).toLocaleString("pl-PL", {maximumFractionDigits: 1});
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const POS = {"poniżej typowego zakresu": "--cheap", "w typowym zakresie": "--typical", "powyżej typowego zakresu": "--dear"};
-const GROUP_NAMES = {uciazliwosci: "Uciążliwości", drogi: "Drogi w budowie i planowane", na_co_dzien: "Na co dzień"};
+const GROUP_NAMES = {uciazliwosci: "Uciążliwości", drogi: "Drogi w budowie i planowane", na_co_dzien: "Na co dzień",
+                     zielen: "Zieleń"};
+const GROUP_ORDER = ["uciazliwosci", "drogi", "na_co_dzien", "zielen"];
 // One line pattern per kind of object, so a power line, a railway and a main road differ without extra hues.
 // ink: CSS colour token; w: width; dash: SVG dash pattern; casing: a lighter band under the line; area: polygon look.
 const STYLE = {
@@ -469,8 +486,16 @@ const STYLE = {
   przedszkole: {ink: "--daily", w: 2, fill: .15, diamond: true},
   szkola: {ink: "--daily", w: 2, fill: .15, diamond: true},
   przystanek: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  sklep: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  apteka: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  przychodnia: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  szpital: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  plac_zabaw: {ink: "--daily", w: 2, fill: .15, diamond: true},
+  park: {ink: "--green", w: 1.5, fill: .22},
+  las: {ink: "--green", w: 1.5, fill: .3},
 };
-const AREAS = new Set(["przemysl", "skladowisko", "oczyszczalnia", "kamieniolom", "lotnisko", "stacja_energetyczna"]);
+const AREAS = new Set(["przemysl", "skladowisko", "oczyszczalnia", "kamieniolom", "lotnisko", "stacja_energetyczna",
+                       "park", "las"]);
 function swatch(kat) {
   const st = STYLE[kat] || STYLE.przemysl;
   if (st.diamond) return `<svg class="swatch" width="22" height="12" aria-hidden="true"><rect x="7" y="2" width="8" height="8"
@@ -677,7 +702,7 @@ function drawMap(d) {
 // Direct labels: the nearest object of each kind that matters says what it is and how far, on the map itself.
 const LABELED = {linia_najwyzsza: "220–400 kV", linia_wn: "110 kV", kolej: "kolej", droga_glowna: "droga główna",
                  przemysl: "przemysł", droga_w_budowie: "droga w budowie", szkola: "szkoła", przedszkole: "przedszkole",
-                 przystanek: "przystanek"};
+                 przystanek: "przystanek", sklep: "sklep", apteka: "apteka", przychodnia: "przychodnia", park: "park"};
 function labelText(kat, it) {
   const kind = LABELED[kat], name = (it.nazwa || "").trim();
   if (!name || STYLE[kat] && !STYLE[kat].diamond) return kind;
@@ -711,7 +736,7 @@ function drawSurroundings(list, fromWhat, origin) {
     if (st.rail) parts.push(L.geoJSON(it.geojson, {style: {color: css("--surface"), weight: st.w - 2, dashArray: "8 8",
                                                           lineCap: "butt"}, interactive: false}));
     main.bindPopup(`<b>${esc(it.etykieta)}</b>${it.nazwa ? ": " + esc(it.nazwa) : ""}<br>${it.odleglosc_m} m ${fromWhat} w linii prostej` +
-                   (it.szczegoly ? "<br>" + esc(it.szczegoly) : "") + (g === "na_co_dzien" ? routeButton() : ""));
+                   (it.szczegoly ? "<br>" + esc(it.szczegoly) : "") + (g === "na_co_dzien" || g === "zielen" ? routeButton() : ""));
     parts.forEach(p => { p._st = p === main ? path : p.options.style; });
     if (origin && LABELED[kat] && !labeled.has(kat)) {
       labeled.add(kat);
@@ -726,7 +751,7 @@ function drawSurroundings(list, fromWhat, origin) {
     }
     (groups[g] = groups[g] || L.layerGroup()).addLayer(fg);
   });
-  return ["uciazliwosci", "drogi", "na_co_dzien"].filter(g => groups[g]).map(g => [groups[g], GROUP_NAMES[g]]);
+  return GROUP_ORDER.filter(g => groups[g]).map(g => [groups[g], GROUP_NAMES[g]]);
 }
 
 function ruler(c, price, lo, hi) {
@@ -806,7 +831,7 @@ function renderSimilar(d) {
 
 function renderAround(d) {
   $("around-h").textContent = `Otoczenie do ${zl(d.promien_otoczenia_m)} m`;
-  const out = ["uciazliwosci", "drogi", "na_co_dzien"].map(g => {
+  const out = GROUP_ORDER.map(g => {
     const all = d.otoczenie_lista.filter(c => c.grupa === g);
     const found = all.filter(c => c.odleglosc_m != null).sort((a, b) => a.odleglosc_m - b.odleglosc_m);
     const missing = all.filter(c => c.odleglosc_m == null).map(c => esc(c.etykieta));
@@ -818,12 +843,63 @@ function renderAround(d) {
       <tbody>${rows}</tbody></table>` : "") +
       (missing.length ? `<p class="note">Brak w danych: ${missing.join(", ")}.</p>` : "");
   });
-  $("around").innerHTML = `<p class="note">Kliknij wiersz, żeby wyróżnić ten rodzaj na mapie.
+  const green = d.zielen_proc == null ? "" : `<p class="verdict-sub">Zieleń (parki i lasy w OSM) w promieniu
+    ${zl(d.promien_zieleni_m)} m: <b>${String(d.zielen_proc).replace(".", ",")}%</b> powierzchni.</p>`;
+  $("around").innerHTML = green + `<p class="note">Kliknij wiersz, żeby wyróżnić ten rodzaj na mapie.
     <button type="button" class="linkish" id="show-all" hidden>Pokaż wszystko</button></p>` + out.join("") +
     `<p class="note">OpenStreetMap to dane społeczności: brak obiektu w danych nie znaczy, że go nie ma.
      Linie energetyczne 110–400 kV są szukane do ${zl(d.promien_sieci_m)} m, kolej i drogi rysowane w całości do
      ${zl(d.promien_otoczenia_m)} m, pozostałe obiekty do 1 km.</p>`;
 }
+
+function renderLand(d) {
+  const g = d.grunt;
+  if (!g) { $("land").innerHTML = fact("Stan", `<span class="missing">sprawdzanie wyłączone (brak połączenia z GUGiK i PIG)</span>`); return; }
+  const p = g.dzialka;
+  const parcel = p ? `${esc(p.numer || "")}, obręb ${esc(p.obreb || "")} <small class="missing">${esc(p.id || "")}</small>`
+    : `<span class="missing">${g.bledy.some(e => e.startsWith("ULDK")) ? "brak odpowiedzi ULDK" : "brak działki w punkcie"}</span>`;
+  const show = list => list.map(a => esc(Object.entries(a).filter(([k]) => /nazw|kopalin|status|rodzaj/i.test(k))
+    .map(([, v]) => v).join(", ") || Object.values(a).slice(0, 2).join(", "))).join("; ");
+  const m = g.gornictwo;
+  const mining = !m ? `<span class="missing">brak odpowiedzi MIDAS</span>`
+    : [m.obszary_gornicze.length ? `obszar górniczy: <b>tak</b> (${show(m.obszary_gornicze)})` : "obszar górniczy: nie",
+       m.tereny_gornicze.length ? `teren górniczy: <b>tak</b> (${show(m.tereny_gornicze)})` : "teren górniczy: nie"].join("<br>");
+  $("land").innerHTML = fact("Działka", parcel) + fact("Górnictwo", mining) +
+    (d.przyblizone ? fact("Uwaga", `<span class="missing">położenie oferty przybliżone, działka może być sąsiednia</span>`) : "");
+}
+
+let costTimer = null, costBase = null;
+function renderCosts(d) {
+  const o = d.oferta;
+  costBase = o.cena ? {cena: o.cena, metraz: o.powierzchnia_m2 || "", rynek: o.rynek || "wtorny"} : null;
+  if (!costBase) { $("costs").innerHTML = `<p class="empty">Oferta bez ceny: brak wyliczenia.</p>`; return; }
+  if (o.rynek === "pierwotny" && $("cost-form").querySelector('[name="wykonczenie_m2"]').value === "0")
+    $("cost-form").querySelector('[name="wykonczenie_m2"]').value = "2000";
+  drawCosts(d.koszty);
+  refreshCosts();
+}
+function drawCosts(k) {
+  if (!k) return;
+  const rows = k.jednorazowe.map(i => `<tr><td>${esc(i.opis)}<small>${esc(i.uwaga)}</small></td><td class="num">${zl(i.kwota)} zł</td></tr>`).join("");
+  const credit = k.kredyt ? `<tr><td>Kredyt ${zl(k.kredyt.kwota)} zł na ${k.kredyt.lata} lat, ${String(k.kredyt.oprocentowanie).replace(".", ",")}%
+      <small>odsetki razem ${zl(k.kredyt.odsetki_razem)} zł</small></td><td class="num"><b>${zl(k.kredyt.rata)} zł</b>/mies.</td></tr>` : "";
+  $("costs").innerHTML = `<table><tbody>${rows}
+    <tr class="sum"><td><b>Razem jednorazowo</b></td><td class="num"><b>${zl(k.razem_jednorazowe)} zł</b></td></tr>
+    <tr><td>Gotówka na start <small>wkład własny i koszty jednorazowe</small></td><td class="num">${zl(k.gotowka_na_start)} zł</td></tr>
+    ${credit}
+    <tr class="sum"><td><b>Miesięcznie razem</b><small>rata i czynsz</small></td><td class="num"><b>${zl(k.miesiecznie.razem)} zł</b></td></tr>
+    </tbody></table>`;
+}
+async function refreshCosts() {
+  if (!costBase) return;
+  const q = new URLSearchParams(costBase);
+  $("cost-form").querySelectorAll("input").forEach(i => q.set(i.name, i.value));
+  try {
+    const r = await fetch("/api/koszty?" + q); const k = await r.json();
+    if (k.ok) drawCosts(k); else $("costs").insertAdjacentHTML("afterbegin", `<p class="err">${esc(k.blad)}</p>`);
+  } catch (e) { /* the card's first estimate stays */ }
+}
+$("cost-form").addEventListener("input", () => { clearTimeout(costTimer); costTimer = setTimeout(refreshCosts, 300); });
 
 function renderSales(d) {
   if (!d.transakcje.length) { $("sales").innerHTML = `<p class="empty">Brak sprzedaży w tym promieniu i okresie.</p>`; return; }
@@ -879,7 +955,7 @@ async function run(params) {
     if (!d.ok) { st.className = "err"; st.textContent = d.blad; return; }
     st.textContent = `Sprzedaży na mapie: ${d.transakcje.length}. Podobnych ofert: ${d.podobne.length}.`;
     $("empty").hidden = true; $("result").hidden = false; $("result").dataset.filled = "1";
-    renderPrice(d); renderOffer(d); renderSimilar(d); renderAround(d); renderSales(d);
+    renderPrice(d); renderOffer(d); renderLand(d); renderSimilar(d); renderAround(d); renderCosts(d); renderSales(d);
     $("card").textContent = d.karta;
     drawMap(d);
     history.replaceState(null, "", "?" + params);

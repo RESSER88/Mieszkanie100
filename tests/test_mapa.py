@@ -106,6 +106,28 @@ class CardJsonTests(unittest.TestCase):
         self.assertIsNone(near["szkola"]["odleglosc_m"])             # schools stay within 3 km
         self.assertEqual(body["promien_sieci_m"], 10000)
 
+    def test_card_has_costs_green_share_and_no_land_section_in_tests(self):
+        status, body = mapa.card_json(self.ctx, {"ulica": "Szurmana", "cena": "839000", "metraz": "65,08"})
+        self.assertIsNone(body["grunt"])                          # no network in tests
+        self.assertEqual(body["koszty"]["jednorazowe"][0]["klucz"], "pcc")
+        self.assertIsNotNone(body["zielen_proc"])
+
+    def test_land_section_with_a_fake_service(self):
+        ctx = mapa.Context(self.ctx.rcn_db, self.ctx.osm_db, self.ctx.oferty_db, today=TODAY,
+                           land_fetch=lambda url: (200, "0\nA|śląskie|Katowice|Katowice|Ligota|14/15\n")
+                           if "uldk" in url else (200, '{"features": []}'),
+                           sources_db=os.path.join(self.tmp.name, "bufor.sqlite"))
+        status, body = mapa.card_json(ctx, {"ulica": "Szurmana", "cena": "839000", "metraz": "65"})
+        self.assertEqual(body["grunt"]["dzialka"]["obreb"], "Ligota")
+        self.assertEqual(body["grunt"]["gornictwo"], {"obszary_gornicze": [], "tereny_gornicze": []})
+
+    def test_costs_endpoint(self):
+        status, body = mapa.costs_json({"cena": "800000", "metraz": "80", "rynek": "pierwotny", "wykonczenie_m2": "2000"})
+        self.assertEqual(status, 200)
+        self.assertIn("wykonczenie", [i["klucz"] for i in body["jednorazowe"]])
+        self.assertEqual(mapa.costs_json({"cena": "x"})[0], 400)
+        self.assertEqual(mapa.costs_json({"cena": "1", "wklad_proc": "200"})[0], 400)
+
     def test_only_portal_links_are_fetched(self):
         for link in ("http://192.168.1.1/admin", "file:///etc/passwd", "https://otodom.pl.evil.com/x",
                      "https://example.com/oferta"):

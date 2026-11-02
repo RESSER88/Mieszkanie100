@@ -43,7 +43,15 @@ CATEGORIES = (
     ("przedszkole", "przedszkole"),
     ("szkola", "szkoła"),
     ("przystanek", "przystanek"),
+    ("sklep", "sklep spożywczy"),
+    ("apteka", "apteka"),
+    ("przychodnia", "przychodnia lub lekarz"),
+    ("szpital", "szpital"),
+    ("plac_zabaw", "plac zabaw"),
+    ("park", "park"),
+    ("las", "las"),
 )
+GREEN = ("park", "las")
 LABELS = dict(CATEGORIES)
 _MAIN_ROADS = {"motorway", "trunk", "primary", "motorway_link", "trunk_link", "primary_link"}
 _LANDUSE = {"industrial": "przemysl", "landfill": "skladowisko", "quarry": "kamieniolom"}
@@ -102,6 +110,20 @@ def classify(tags: Dict[str, str]) -> Optional[str]:
         return "szkola"
     if highway == "bus_stop" or railway == "tram_stop" or tags.get("public_transport") == "platform":
         return "przystanek"
+    if amenity == "pharmacy":
+        return "apteka"
+    if amenity in ("clinic", "doctors"):
+        return "przychodnia"
+    if amenity == "hospital":
+        return "szpital"
+    if tags.get("shop") in ("supermarket", "convenience"):
+        return "sklep"
+    if tags.get("leisure") == "playground":
+        return "plac_zabaw"
+    if tags.get("leisure") == "park":
+        return "park"
+    if tags.get("landuse") == "forest" or tags.get("natural") == "wood":
+        return "las"
     if highway in ("construction", "proposed"):
         road_class = (tags.get(highway) or "").replace("_link", "")
         if road_class and road_class not in _ROAD_CLASSES:
@@ -308,6 +330,34 @@ def nearby(con: sqlite3.Connection, center: Tuple[float, float], radius_m: float
                 item["typ_geometrii"], item["geometria"] = gtype, coords
             found.append(item)
     return sorted(found, key=lambda item: item["odleglosc_m"])
+
+
+def green_share(con: sqlite3.Connection, center: Tuple[float, float], radius_m: float = 500.0,
+                step_m: float = 25.0) -> float:
+    """Percent of the circle covered by parks and forests in OSM, from a grid of sample points (step_m apart)."""
+    cy, cx = center
+    polys = []
+    for gtype, geom_json in con.execute(
+            "SELECT typ_geometrii, geom_json FROM osm_obiekty WHERE kategoria IN (%s)"
+            " AND max_y >= ? AND min_y <= ? AND max_x >= ? AND min_x <= ?" % ",".join("?" * len(GREEN)),
+            list(GREEN) + [cy - radius_m, cy + radius_m, cx - radius_m, cx + radius_m]):
+        coords = json.loads(geom_json)
+        if gtype == "Polygon":
+            polys.append(coords)
+        elif gtype == "MultiPolygon":
+            polys.extend(coords)
+    inside = total = 0
+    steps = int(radius_m // step_m)
+    for i in range(-steps, steps + 1):
+        for j in range(-steps, steps + 1):
+            dy, dx = i * step_m, j * step_m
+            if dy * dy + dx * dx > radius_m * radius_m:
+                continue
+            total += 1
+            p = (cy + dy, cx + dx)
+            if any(_inside(p, rings[0]) and not any(_inside(p, hole) for hole in rings[1:]) for rings in polys):
+                inside += 1
+    return round(100.0 * inside / total, 1) if total else 0.0
 
 
 def format_report(street: str, radius_m: float, items: List[dict],
