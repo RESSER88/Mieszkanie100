@@ -557,8 +557,9 @@ if (TOKEN) {
 try { const saved = localStorage.getItem("mieszkanie100.podklad"); if (saved && bases[saved]) baseName = saved; } catch (e) { /* no storage */ }
 bases[baseName].addTo(map);
 map.on("baselayerchange", ev => { try { localStorage.setItem("mieszkanie100.podklad", ev.name); } catch (e) { /* no storage */ } });
+// Services without EPSG:3857 (GDOŚ, orthophoto, GDDKiA noise) are asked in EPSG:4326; Leaflet fits each tile.
 bases["Ortofotomapa (GUGiK)"] = L.tileLayer.wms("https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution", {
-  layers: "Raster", format: "image/jpeg", maxZoom: 20, attribution: "Ortofotomapa: GUGiK | " + SOURCES});
+  layers: "Raster", format: "image/jpeg", maxZoom: 20, crs: L.CRS.EPSG4326, attribution: "Ortofotomapa: GUGiK | " + SOURCES});
 const control = L.control.layers(bases, null, {collapsed: true}).addTo(map);
 // Official layers to switch on in the layer menu; each one is a picture from the service (no data leaves the Pi).
 const WMS_OVERLAYS = [
@@ -568,7 +569,9 @@ const WMS_OVERLAYS = [
    {layers: "raster,wektor-pow,wektor-lin,plany_granice", minZoom: 13, opacity: .6}],
   ["Ochrona przyrody (GDOŚ)", "https://sdi.gdos.gov.pl/wms",
    {layers: "GDOS:ObszaryChronionegoKrajobrazu,GDOS:ObszarySpecjalnejOchrony,GDOS:ParkiKrajobrazowe,GDOS:Rezerwaty,GDOS:PomnikiPrzyrody",
-    opacity: .5}],
+    opacity: .5, crs: L.CRS.EPSG4326}],
+  ["Hałas dróg krajowych, LDWN (GDDKiA)", "https://mapy.geoportal.gov.pl/wss/service/gddkia/mapaImisyjnaLDWN",
+   {layers: "Imisja_wskaznik_LDWN", opacity: .55, crs: L.CRS.EPSG4326}],
 ];
 WMS_OVERLAYS.forEach(([name, url, opts]) => control.addOverlay(
   L.tileLayer.wms(url, Object.assign({format: "image/png", transparent: true, version: "1.1.1", maxZoom: 20}, opts)), name));

@@ -139,7 +139,7 @@ ZONING_FIELDS = ("OZNACZENIE_TERENU", "WR_SYMBOL", "SYMBOL_PODS", "OPIS", "PRZEZ
 def _feature_info_plain(text: str) -> List[Dict[str, Any]]:
     """Esri WMS text/plain: "@Layer" then a header row and value rows separated by ";"."""
     rows, layer, header = [], None, None
-    for line in re.split(r"\r?\n", text or ""):
+    for line in re.split(r"\r\n|\r|\n", text or ""):
         if line.startswith("@"):
             match = re.match(r"^@(.*?)((?:ID|OBJECTID|FID);.*)?$", line)
             layer, header = match.group(1).strip(), (match.group(2).split(";") if match.group(2) else None)
@@ -235,7 +235,7 @@ def report(point: Tuple[float, float], cache_path: str, fetch: Callable = http_g
     try:
         for key, source, work in (("dzialka", "uldk", lambda: parcel(point, fetch)),
                                   ("gornictwo", "midas", lambda: mining(point, fetch)),
-                                  ("plan", "mpzp", lambda: zoning(point, fetch)),
+                                  ("plan", "mpzp2", lambda: zoning(point, fetch)),     # mpzp2: answers before the line-end fix are dropped
                                   ("geozagrozenia", "pig_gz", lambda: geohazards(point, fetch))):
             try:
                 out[key] = cache.get_or(source, point, work, today)

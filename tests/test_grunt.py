@@ -145,3 +145,9 @@ class MiningSummaryTests(unittest.TestCase):
         fetch = FakeFetch({"GetParcelByXY": (200, "0\nA|śląskie|powiat Katowice|Katowice (miasto)|Dz. Ligota|14/15\n")})
         p = grunt.parcel(POINT, fetch=fetch)
         self.assertEqual((p["powiat"], p["gmina"], p["obreb"]), ("Katowice", "Katowice", "Ligota"))
+
+
+class ZoningLineEndTests(unittest.TestCase):
+    def test_carriage_returns_only(self):
+        text = "@MPZP Tereny\rID;WR_SYMBOL;OPIS\r9;MW;wielorodzinna\r"
+        self.assertEqual(grunt.zoning(POINT, fetch=FakeFetch({"GetFeatureInfo": (200, text)}))[0]["symbol"], "MW")
